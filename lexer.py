@@ -1,22 +1,9 @@
-# from ast import Str, literal_eval
-# from curses.ascii import isdigit
-from enum import Enum, IntEnum, auto
-from genericpath import samefile
-from math import fabs
-from mmap import MADV_AUTOSYNC
-from os import name
+from enum import Enum, auto
 import re
-from tokenize import Token
 from typing import Generator
-
-# from xml.dom.minidom import Entity
 from more_itertools import peekable
 import uuid
-
 import more_itertools
-
-
-
 
 
 class build_in_type(Enum):
@@ -44,84 +31,117 @@ class build_in_type(Enum):
 
         return temp_str
 
+    def is_build_in_type(self) -> bool:
+        return True if self.value < 14 else False
+
+    def is_complex_type(self) -> bool:
+        return True if self.value >= 14 else False
+
+
 class C_type:
-    def __init__(self, type_ : build_in_type, is_const_ = False, is_volatile_ = False):
+    def __init__(self, type_: build_in_type, is_const_=False, is_volatile_=False):
         self.type = type_
         self.is_const = is_const_
         self.is_volatile = is_volatile_
-        #self.subtype
-        pass
-    def __str__(self)->str:
+        # self.subtype = None
+
+    def __str__(self) -> str:
         quan_ = ""
         if self.is_const:
             quan_ += "const "
-        
+
         if self.is_volatile:
             quan_ += "volatile "
-        
+
         return f"{quan_}{self.type}"
-    
+
     def GetMember() -> list[tuple[str, "C_type"]]:
         pass
 
-class C_build_in_type(C_type):
-    def __init__(self, argument_list : list[str]):
-        #super().__init__()
-        self.size = len(argument_list)
-        self.element_type 
 
+class C_build_in_type(C_type):
+    def __init__(self, argument_list: list[str]):
+        # super().__init__()
+        self.size = len(argument_list)
+        self.element_type
 
 
 class C_complex_type(C_type):
-    def __init__(self, argument_dict:dict):
-        self.argument_dict = argument_dict
+    def __init__(
+        self,
+        type__: build_in_type,
+        subtype_ : build_in_type | C_type,
+        is_const_: bool = False,
+        is_volatile: bool = False,
+    ):
+        super().__init__(type__, is_const_, is_volatile)
+        self.__minorType: C_type | C_complex_type = None
+        self.subtype = subtype_
 
-    def __setitem__(self, key : int ,val : any):
+    def __setitem__(self, key: int, val: any):
         self.argument_dict[key] = val
 
-    def __getitem__(self, key : int):
+    def __getitem__(self, key: int):
         return self.argument_dict[key]
 
-class C_build_in_pointer(C_type):
-    def __init__(self, type_, is_const_=False, is_volatile_=False):
-        super().__init__(type_, is_const_, is_volatile_)
-        self.type = build_in_type.BUILD_IN_POINTER
-    pass
+    def MinorType(self) -> C_type:
+        return self.__minorType
+
+    def __str__(self) -> str:
+        return f"{super().__str__()} of "
+
+
+class C_build_in_pointer(C_complex_type):
+    def __init__(self, subtype: C_type, is_const_=False, is_volatile_=False):
+        super().__init__(build_in_type.BUILD_IN_POINTER, subtype, is_const_, is_volatile_)
+
+    def __str__(self):
+        return f"{super().__str__()}{self.subtype}"
+
 class C_build_in_array(C_complex_type):
 
-    def __init__(self, argument_dict : dict):
-        super().__init__(argument_dict)
-        self.__size = len(argument_dict)
-        self.type = build_in_type.BUILD_IN_ARRAY
-    
-    def Size(self) ->int:
+    def __init__(
+        self,
+        size_: int,
+        element_type_: C_type,
+        is_const: bool = False,
+        is_volatile=False,
+    ):
+        super().__init__(build_in_type.BUILD_IN_ARRAY, element_type_, is_const, is_volatile)
+        self.__size = size_
+        #self.sub_type: C_type = element_type_
+
+    def Size(self) -> int:
         return self.__size
 
-    def __setitem__(self, key : int ,val : any):
+    def __setitem__(self, key: int, val: any):
         assert isinstance(key, int)
         self.argument_dict[key] = val
 
-    def __getitem__(self, key : int):
+    def __getitem__(self, key: int):
         assert isinstance(key, int)
         return self.argument_dict[key]
+
+    def __str__(self):
+        return f"{super().__str__()}{self.__size} of {self.subtype}"
+
 
 class C_struct(C_complex_type):
     def __init__(self):
         super().__init__()
         self.type = build_in_type.DEFINED_STRUCT
 
-    
+
 class C_union(C_complex_type):
     def __init__(self):
         super().__init__()
         self.type = build_in_type.DEFINED_UNION
 
+
 class C_function_ptr(C_build_in_pointer):
     def __init__(self):
         super().__init__()
         self.type = build_in_type.CALL_FUNCTION
-
-
 
 
 def SetType(type_: str) -> build_in_type | str:
@@ -152,73 +172,6 @@ def SetType(type_: str) -> build_in_type | str:
             return build_in_type.FLOAT
         case _:
             return type_
-
-
-#class UsingType:
-#    def __init__(
-#        self,
-#        typename_: str,
-#        is_const_: bool = False,
-#        is_volatile_: bool = False,
-#        is_array_: bool = False,
-#        array_size_: int = -1,
-#        #########is_ptr: bool = False,
-#    ):
-#        self.typename: UsingType | str = SetType(typename_)
-#        self.subtype: UsingType = None
-#        self.is_const = is_const_
-#        self.is_volatile = is_volatile_
-#        self.is_array = is_array_
-#        self.__array_size = array_size_
-#        self.argument_list: list = None
-#        self.typedef_name = ""
-#        self.member_list = None
-#        # self.is_ptr = is_ptr
-#
-#    # todo: future fix: location of const and volatile, which quantify which
-#    def __str__(self):
-#        quan_ = ""
-#
-#        if self.is_const:
-#            quan_ += "const"
-#        if self.is_volatile:
-#            quan_ += "volatile"
-#
-#        if quan_ != "":
-#            quan_ += " of"
-#        # todo: support typedef
-#
-#        if self.typename == build_in_type.BUILD_IN_POINTER:
-#            return f"is ptr to {self.subtype}"
-#
-#        if self.is_array:
-#            assert self.__array_size != -1
-#            return f"{quan_} array {self.__array_size} of {self.typename}"
-#        else:
-#            return f"{quan_} {self.typename}"
-#
-#    def is_buildin_type_combination(self) -> bool:
-#        if isinstance(self.typename, build_in_type):
-#            return True
-#        return False
-#
-#    def SetArraySize(self, sz: int):
-#        self.is_array = 1
-#        self.__array_size = sz
-#
-#    def GetArraySize(self):
-#        if not self.is_array:
-#            print("current type is not array")
-#        return self.__array_size
-#
-#    def UpdateSubtype(self) -> "UsingType":
-#        type_: UsingType = None
-#        if self.subtype is None:
-#            return self
-#        parent_type = self.typename
-#        while (type_ := parent_type.subtype) is None:
-#            parent_type = parent_type.subtype
-#        return type_
 
 
 all_defined_type: dict[str, "UserDefineType"] = {}
@@ -377,6 +330,58 @@ known_types = [
 ]
 
 
+def StringToEnum(type_str: str):
+    match type_str:
+        case "int":
+            return build_in_type.INT
+        case "unsigned int":
+            return build_in_type.UNSIGNED_INT
+        case "long long":
+            return build_in_type.LONG_LONG
+        case "unsigned long long":
+            return build_in_type.UNSIGNED_LONG_LONG
+        case "long":
+            return build_in_type.LONG
+
+
+def SrtToType(type_str: str) -> build_in_type:
+    match type_str:
+        case "int":
+            return build_in_type.INT
+        case "unsigned int":
+            return build_in_type.UNSIGNED_INT
+        case "short":
+            return build_in_type.SHORT
+        case "unsigned short":
+            return build_in_type.UNSIGNED_SHORT
+        case "long":
+            return build_in_type.LONG
+        case "long long":
+            return build_in_type.LONG_LONG
+        case "unsigned long long":
+            return build_in_type.UNSIGNED_LONG_LONG
+        case "char":
+            return build_in_type.CHAR
+        case "signed char":
+            return build_in_type.SIGNED_CHAR
+        case "unsigned char":
+            return build_in_type.UNSIGNED_CHAR
+        case "double":
+            return build_in_type.DOUBLE
+        case "float":
+            return build_in_type.FLOAT
+        case _:
+            raise AssertionError
+
+
+# def Factory_C_Type(type_ : build_in_type, *args, **kwargs):
+#    match type_:
+#        case type_.is_build_in_type():
+#            return C_type(*args, **kwargs)
+#        case build_in_type.C_Struct():
+#            return C_complex_type(*args, **kwargs)
+
+
 def OmitToken(codes: str) -> Generator:
     token = ""
     bracket_stack = []
@@ -401,7 +406,6 @@ def OmitToken(codes: str) -> Generator:
                 yield token
                 token = ""
             elif c in ["\n", "\t", " ", "\b"]:
-                # bracket_stack.append(c)
                 continue
             else:
                 yield c
@@ -424,6 +428,9 @@ sample_code = "int a[3];"
 def IsIdentifier(identifier: str) -> False:
     if identifier in reserved_word:
         return False
+
+    if identifier in all_defined_type:
+        return True
     if (temp := re.search(r"([\w_]+)", identifier)) is not None:
         temp = temp.group(1)
         if temp == identifier:
@@ -462,11 +469,9 @@ class Lexer:
     pass
 
 
-def funcname(self, parameter_list):
-    """
-    docstring
-    """
-    pass
+def is_cv(codeGenerator: peekable):
+    cv_list = ["const", "volatile"]
+    return True if codeGenerator.peek() in cv_list else False
 
 
 def is_c_type(code: str):
@@ -488,38 +493,46 @@ def is_c_type(code: str):
     return False
 
 
-def GetSubtype(codeGenerator : peekable, token_list : list[str]) -> C_type:
+def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
     token = next(codeGenerator)
     type_ = None
     is_ptr = False
-    #token_list = []
+    # token_list = []
     id: identifier = None
     is_const_ = 0
     is_volatile_ = 0
     temp_: str = ""
     bracket_content = ""
+    argument_dict = {}
     while token != ";":
 
         token_list.append(token)
 
         if token == "[":
+            token = next(codeGenerator)
             while token != "]":
-                token = next(codeGenerator)
                 bracket_content += token
-                
+                token = next(codeGenerator)
+
                 token_list.append(token)
 
-            array_size = ""
+            array_size = bracket_content
             token_list.pop()
             while (temp_ := token_list.pop()) != "[":
                 array_size += temp_
-            #update_typed = id.type.UpdateSubtype()
-            current_type = C_build_in_array(build_in_type.BUILD_IN_ARRAY, array_size = bracket_content)
-            current_type.subtype = GetSubtype(codeGenerator, token_list)
+            # update_typed = id.type.UpdateSubtype()
+            if codeGenerator.peek() == "=":
+                pass
+            else:
+                element_type = GetSubtype(codeGenerator, token_list)
+                # argument_dict = {x : identifier(element_type, x, None) for  x in range()}
+
+            return C_build_in_array(array_size, element_type)
+            # current_type.subtype = GetSubtype(codeGenerator, token_list)
             break
-            #math_type = token_list.pop()
-            #update_typed.subtype = UsingType(math_type, is_array_=1, array_size_=array_size)
-            #SetArraySize(array_size)
+            # math_type = token_list.pop()
+            # update_typed.subtype = UsingType(math_type, is_array_=1, array_size_=array_size)
+            # SetArraySize(array_size)
         elif token == "(":
             while token != ")":
                 token = next(codeGenerator)
@@ -530,6 +543,28 @@ def GetSubtype(codeGenerator : peekable, token_list : list[str]) -> C_type:
                 argument_list += temp_
             id.type.argument_list = argument_list
             break
+        elif token == ")":
+            in_parathesis = []
+            token_list.pop()
+            while token_list[-1] != "(":
+                in_parathesis.append(token_list.pop())
+
+            token_list.pop()
+            while is_cv(codeGenerator):
+                temp_ = next(codeGenerator)
+                if temp_ == "const":
+                    is_const_ = True
+
+                if temp_ == "volatile":
+                    is_volatile_ = True
+
+            return C_build_in_pointer(
+                GetSubtype(codeGenerator, token_list),
+                is_const_=is_const_,
+                is_volatile_=is_volatile_,
+            )
+
+            token_list.pop()
         # todo: support init list
         elif token == "{":  # init list
             while token != "}":
@@ -540,13 +575,19 @@ def GetSubtype(codeGenerator : peekable, token_list : list[str]) -> C_type:
             current_type = C_function_ptr()
             current_type.subtype = GetSubtype(codeGenerator, token_list)
             return current_type
+        elif token in known_types:
+            return StringToEnum(token)
 
         token = next(codeGenerator)
-    #if len(token_list):
-    #    math_type = token_list.pop()
-    #    update_typed.subtype = UsingType(math_type)
-    #    return update_typed
-    return None
+
+    while len(token_list):
+        temp_ = token_list.pop()
+        if temp_ == "const":
+            is_const_ = True
+        if temp_ == "volatile":
+            is_volatile_= True
+    assert len(token_list) == 0, token_list
+    return C_type(StringToEnum(temp_), is_const_, is_volatile_)
 
 
 def ReadDeclaration(codeGenerator: peekable) -> identifier:
@@ -561,94 +602,34 @@ def ReadDeclaration(codeGenerator: peekable) -> identifier:
     is_const_ = 0
     is_volatile_ = 0
     temp_: str = ""
+    type_ = None
     try:
         while token != ";":
-
             token_list.append(token)
-
             if IsIdentifier(token):
                 identifier_name = token_list.pop()
-                while not is_c_type(type_ := token_list.pop()):
-                    if type_ == "const":
-                        is_const_ = 1
-                    elif type_ == "volatile":
-                        is_volatile_ = 1
-                identifier_type = type_
-                if identifier_type == "*":
-                    if not codeGenerator.peek() == "[":
-                        identifier_type = build_in_type.BUILD_IN_POINTER
-                    else:
-                        identifier_type = build_in_type.BUILD_IN_ARRAY
-                
-                if codeGenerator.peek() == ")":
-                    _ = next(codeGenerator)
-
-                #if id is None:
-                id  = C_type(
-                    UsingType(identifier_type, is_const_, is_volatile_), identifier_name
-                )
-                id.subtype = GetSubtype(codeGenerator, token_list)
+                id = identifier(GetSubtype(codeGenerator, token_list), token)
                 all_identifier[id.annotated_name] = id
-                break
-                #else:
-                #    last_sub_type = id.type.UpdateSubtype()
-                #    last_sub_type.subtype = UsingType(type_, is_const_, is_volatile_)
-                #all_identifier[id.annotated_name] = id
-                #all
+                return id
             token = next(codeGenerator)
     except StopIteration:
         pass
-        #elif id is None:
-        #    token_list.append(token)
-        """ elif id is not None:
-            if token == "[":
-                while token != "]":
-                    token = next(codeGenerator)
-                    token_list.append(token)
-
-                array_size = ""
-                token_list.pop()
-                while (temp_ := token_list.pop()) != "[":
-                    array_size += temp_
-                update_typed = id.type.UpdateSubtype()
-                math_type = token_list.pop()
-                update_typed.subtype = UsingType(math_type, is_array_=1, array_size_=array_size)
-                #SetArraySize(array_size)
-            elif token == "(":
-                while token != ")":
-                    token = next(codeGenerator)
-                    token_list.append(token)
-
-                argument_list = ""
-                while (temp_ := token_list.pop()) != "(":
-                    argument_list += temp_
-                id.type.argument_list = argument_list
-            # todo: support init list
-            elif token == "{":  # init list
-                while token != "}":
-                    token = next(codeGenerator)
-                pass
-                # continue """
-
-    #    token = next(codeGenerator)
-    #if len(token_list):
-    #    math_type = token_list.pop()
-    #    update_typed.subtype = UsingType(math_type)
 
     return id
-    # return identifier(UsingType(type_), token, token)
 
 
-sample_code = ["int const volatile (*a)[3];", "int const volatile *a[3];", ]
+sample_code = [
+    "int const volatile (*a)[3];",
+    "int const volatile *a[3];",
+]
 samefile_code = ["int (*a)[3];"]
 C_init_list = "struct a {.a = 10, .b = 3.124};"
 
-for s in samefile_code:
+for s in sample_code:
     TokenGen(s)
     print(all_identifier["a"])
 
-# a = ReadDeclaration(cg)
-# print(a)
+
 
 
 class Lexer:
