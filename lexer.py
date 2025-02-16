@@ -39,10 +39,13 @@ class build_in_type(Enum):
 
 
 class C_type:
-    def __init__(self, type_: build_in_type, is_const_=False, is_volatile_=False):
+    def __init__(
+        self, type_: build_in_type, is_const_=False, is_volatile_=False, aka: str = ""
+    ):
         self.type = type_
         self.is_const = is_const_
         self.is_volatile = is_volatile_
+        self.aka = aka
         # self.subtype = None
 
     def __str__(self) -> str:
@@ -70,11 +73,12 @@ class C_complex_type(C_type):
     def __init__(
         self,
         type__: build_in_type,
-        subtype_ : build_in_type | C_type,
+        subtype_: build_in_type | C_type,
         is_const_: bool = False,
         is_volatile: bool = False,
+        aka: str = "",
     ):
-        super().__init__(type__, is_const_, is_volatile)
+        super().__init__(type__, is_const_, is_volatile, aka)
         self.__minorType: C_type | C_complex_type = None
         self.subtype = subtype_
 
@@ -92,11 +96,16 @@ class C_complex_type(C_type):
 
 
 class C_build_in_pointer(C_complex_type):
-    def __init__(self, subtype: C_type, is_const_=False, is_volatile_=False):
-        super().__init__(build_in_type.BUILD_IN_POINTER, subtype, is_const_, is_volatile_)
+    def __init__(
+        self, subtype: C_type, is_const_=False, is_volatile_=False, aka: str = ""
+    ):
+        super().__init__(
+            build_in_type.BUILD_IN_POINTER, subtype, is_const_, is_volatile_
+        )
 
     def __str__(self):
         return f"{super().__str__()}{self.subtype}"
+
 
 class C_build_in_array(C_complex_type):
 
@@ -106,10 +115,13 @@ class C_build_in_array(C_complex_type):
         element_type_: C_type,
         is_const: bool = False,
         is_volatile=False,
+        aka: str = "",
     ):
-        super().__init__(build_in_type.BUILD_IN_ARRAY, element_type_, is_const, is_volatile)
+        super().__init__(
+            build_in_type.BUILD_IN_ARRAY, element_type_, is_const, is_volatile, aka
+        )
         self.__size = size_
-        #self.sub_type: C_type = element_type_
+        # self.sub_type: C_type = element_type_
 
     def Size(self) -> int:
         return self.__size
@@ -126,22 +138,64 @@ class C_build_in_array(C_complex_type):
         return f"{super().__str__()}{self.__size} of {self.subtype}"
 
 
-class C_struct(C_complex_type):
-    def __init__(self):
-        super().__init__()
-        self.type = build_in_type.DEFINED_STRUCT
+class C_USER_DEFINED_TYPE(C_type):
+    def __init__(
+        self,
+        type_,
+        argument_dict: dict,
+        typedef_name : str = "",
+        is_const_=False,
+        is_volatile_=False,
+        aka: str = "",
+    ):
+        super().__init__(type_, is_const_, is_volatile_, aka)
+        self.argument_dict = argument_dict
+        self.typedef_name = typedef_name
+
+    def __str__(self) -> str:
+        fmtstr = f"{self.type} : aka {self.typedef_name}\nmember:{{\n{"\n".join([f"{k} : {v}" for k, v in self.argument_dict.items()])}\n}}"
+        return fmtstr
 
 
-class C_union(C_complex_type):
-    def __init__(self):
-        super().__init__()
-        self.type = build_in_type.DEFINED_UNION
+class C_struct(C_USER_DEFINED_TYPE):
+    def __init__(
+        self,
+        argument_dict: dict[str, C_type],
+        is_const_=False,
+        is_volatile_=False,
+        aka: str = "",
+    ):
+        super().__init__(
+            build_in_type.DEFINED_STRUCT, argument_dict, is_const_, is_volatile_, aka
+        )
+        # self.type = build_in_type.DEFINED_STRUCT
 
 
-class C_function_ptr(C_build_in_pointer):
-    def __init__(self):
-        super().__init__()
-        self.type = build_in_type.CALL_FUNCTION
+class C_union(C_USER_DEFINED_TYPE):
+    def __init__(
+        self,
+        argument_dict: dict[str, C_type],
+        is_const_=False,
+        is_volatile_=False,
+        aka: str = "",
+    ):
+        super().__init__(
+            build_in_type.DEFINED_UNION, argument_dict, is_const_, is_volatile_, aka
+        )
+        # self.type = build_in_type.DEFINED_UNION
+
+
+class C_function_ptr(C_USER_DEFINED_TYPE):
+    def __init__(
+        self,
+        argument_dict: dict[str, C_type],
+        is_const=False,
+        is_volatile_=False,
+        aka: str = "",
+    ):
+        super().__init__(
+            build_in_type.CALL_FUNCTION, argument_dict, is_const, is_volatile_, aka
+        )
 
 
 def SetType(type_: str) -> build_in_type | str:
@@ -190,6 +244,10 @@ class UserDefineType:
     def AddMember(self, name_: str, type_: str):
         self.member[name_] = identifier(type_, name_)
 
+    def __str__(self) -> str:
+        fmtstr = f"{self.name} : aka {self.typedef_name}\nmember:{{{"\n    ".join([f"{k} : {v}" for k, v in self.member.items()])}}}"
+        return fmtstr
+
 
 class UserDefineStruct(UserDefineType):
     def __init__(self, name_: str):
@@ -200,6 +258,10 @@ class UserDefineStruct(UserDefineType):
 
     def __setitem__(self, key: str, val: any):
         self.member[key].value = val
+
+    def __str__(self) -> str:
+        fmtstr = f"{self.name} : aka {self.typedef_name}\nmember:{{{"\n    ".join([f"{k} : {v}" for k, v in self.member.items()])}}}"
+        return fmtstr
 
 
 class UserDefineEnum(UserDefineType):
@@ -230,6 +292,8 @@ class identifier:
             self.type: C_type = typename
         self.value: any = val
         identifier.all_identifier[self.annotated_name] = self
+        self.is_const = False
+        self.is_volatile = False
 
     def __str__(self) -> str:
         temp_str = (
@@ -302,11 +366,6 @@ reserved_word = [
 ]
 
 
-class UserDefineStruct:
-    def __init__(self):
-        pass
-
-
 expression_keyword = ["if", "while", "for", "do"]
 
 
@@ -327,6 +386,24 @@ known_types = [
     "unsigned long long",
     "double",
     "float",
+    "struct",
+    "union",
+    "unsigned",
+]
+
+
+frament_type_key = [
+    "int",
+    "unsigned",
+    "char",
+    "signed",
+    "unsigned",
+    "long",
+    "double",
+    "float",
+    "struct",
+    "union",
+    "short",
 ]
 
 
@@ -334,14 +411,30 @@ def StringToEnum(type_str: str):
     match type_str:
         case "int":
             return build_in_type.INT
-        case "unsigned int":
+        case w if w in ["unsigned int" , "int unsigned"]:
             return build_in_type.UNSIGNED_INT
+        case "char":
+            return build_in_type.CHAR
+        case w if w in ["unsigned char" , "char unsigned"]:
+            return build_in_type.UNSIGNED_CHAR
+        case w if w in ["signed char" , "char signed"]:
+            return build_in_type.SIGNED_CHAR
+        case "short":
+            return build_in_type.SHORT
+        case w if w in ["unsigned short" , "short unsigned"]:
+            return build_in_type.UNSIGNED_SHORT
         case "long long":
             return build_in_type.LONG_LONG
-        case "unsigned long long":
+        case w if w in ["unsigned long long" , "long long unsigned"]:
             return build_in_type.UNSIGNED_LONG_LONG
         case "long":
             return build_in_type.LONG
+        case  w if w in ["unsigned long" , "long unsigned"]:
+            return build_in_type.UNSIGNED_LONG
+        case "struct":
+            return build_in_type.DEFINED_STRUCT
+        case "union":
+            return build_in_type.DEFINED_UNION
 
 
 def SrtToType(type_str: str) -> build_in_type:
@@ -389,35 +482,67 @@ def OmitToken(codes: str) -> Generator:
         if c in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM":
             token += c
         else:
-            if token != "" and token not in reserved_word:
-                yield token
+            # if c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789":
+            #    token += c
+            if c in ["\t", " ", "\b","\n"]:
+                if token != "":
+                    yield token
+                    token = ""
+                continue
+            elif not IsIdentifier(c):
+                if token != "":
+                    yield token
+                token = ""
+                # token += c
                 yield c
-                token = ""
-            elif token != "" and token in reserved_word:
-                yield token
-                token = ""
-                """ if token == "if":
-                    pass
-                elif token == "for":
-                    pass
-                elif token == "while" or token == "do":
-                    pass """
             elif token in known_types:
                 yield token
                 token = ""
-            elif c in ["\n", "\t", " ", "\b"]:
-                continue
             else:
                 yield c
+            # if not IsIdentifier(c) and IsIdentifier(token):
+            #    yield token
+            #    yield c
+
+
+typedef_dict: dict[str, C_type] = {}
 
 
 def TokenGen(codes: str):
     tokengen = peekable(OmitToken(codes))
     # print("hello,world")
-
     peek_ = tokengen.peek()
-    if peek_ in known_types:
-        ReadDeclaration(tokengen)
+    typedef_name = ""
+    temp_type = None
+    try:
+        while peek_ := tokengen.peek():
+            if peek_ in known_types:
+                ReadDeclaration(tokengen)
+            elif peek_ == "#":
+                # Preprocessor(tokengen)
+                pass
+            elif peek_ == "struct":
+                next(tokengen)
+                typedef_name, temp_type = ReadTypedef(tokengen)
+                while peek_ != ";":
+                    typedef_dict[peek_] = f"{typedef_name}"
+                    peek_ = next(tokengen)
+                # typed
+                pass
+            elif peek_ == "typedef":
+                next(tokengen)
+                if temp_type is not None:
+                    peek_ = next(tokengen)
+                    while peek_ != ";":
+                        typedef_dict[peek_] = temp_type
+                        peek_ = next(tokengen)
+                    pass
+            elif peek_ in expression_keyword:
+                pass
+            else:
+                peek_ = next(tokengen)
+    except StopIteration:
+        pass
 
 
 all_type: dict[str, UserDefineType] = {}
@@ -431,7 +556,7 @@ def IsIdentifier(identifier: str) -> False:
 
     if identifier in all_defined_type:
         return True
-    if (temp := re.search(r"([\w_]+)", identifier)) is not None:
+    if (temp := re.search(r"(^[a-zA-Z_][\w_]*?$)", identifier)) is not None:
         temp = temp.group(1)
         if temp == identifier:
             return True
@@ -520,19 +645,13 @@ def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
             token_list.pop()
             while (temp_ := token_list.pop()) != "[":
                 array_size += temp_
-            # update_typed = id.type.UpdateSubtype()
             if codeGenerator.peek() == "=":
                 pass
             else:
                 element_type = GetSubtype(codeGenerator, token_list)
-                # argument_dict = {x : identifier(element_type, x, None) for  x in range()}
 
             return C_build_in_array(array_size, element_type)
-            # current_type.subtype = GetSubtype(codeGenerator, token_list)
-            break
-            # math_type = token_list.pop()
-            # update_typed.subtype = UsingType(math_type, is_array_=1, array_size_=array_size)
-            # SetArraySize(array_size)
+
         elif token == "(":
             while token != ")":
                 token = next(codeGenerator)
@@ -546,7 +665,7 @@ def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
         elif token == ")":
             in_parathesis = []
             token_list.pop()
-            while token_list[-1] != "(":
+            while len(token_list) and token_list[-1] != "(":
                 in_parathesis.append(token_list.pop())
 
             token_list.pop()
@@ -568,28 +687,45 @@ def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
         # todo: support init list
         elif token == "{":  # init list
             while token != "}":
-                token = next(codeGenerator)
-            pass
-            # continue
+                if codeGenerator.peek() == "\n":
+                    token = next(codeGenerator)
+                    continue
+                elif codeGenerator.peek() == "}":
+                    next(codeGenerator)
+                    break
+                id = ReadDeclaration(codeGenerator)
+                if id is None and codeGenerator.peek() == "}":
+                        break
+                argument_dict[id.annotated_name] = id
+                #token = next(codeGenerator)
+            return C_USER_DEFINED_TYPE(build_in_type.DEFINED_STRUCT, argument_dict)
         elif token == "*":
-            current_type = C_function_ptr()
-            current_type.subtype = GetSubtype(codeGenerator, token_list)
+            if codeGenerator.peek() == "(":
+                pass
+            current_type = C_build_in_pointer(GetSubtype(codeGenerator, token_list))
             return current_type
-        elif token in known_types:
-            return StringToEnum(token)
+
+        elif token in frament_type_key:
+            long_token = token
+            try:
+                while codeGenerator.peek() in frament_type_key:
+                    long_token = f"{next(codeGenerator)} {long_token}"
+            except StopIteration:
+                pass
+            print(long_token)
+            return StringToEnum(long_token)
 
         token = next(codeGenerator)
 
-    while len(token_list):
-        temp_ = token_list.pop()
-        if temp_ == "const":
-            is_const_ = True
-        if temp_ == "volatile":
-            is_volatile_= True
-    assert len(token_list) == 0, token_list
-    return C_type(StringToEnum(temp_), is_const_, is_volatile_)
+    if len(token_list):
+        token_list.reverse()
+        newcodeGenerator = peekable(iter(token_list))
+        return GetSubtype(newcodeGenerator, [])
+    assert len(token_list) == 0
+    return None
 
 
+# token_count
 def ReadDeclaration(codeGenerator: peekable) -> identifier:
     token = next(codeGenerator)
     literal_: str = ""
@@ -605,10 +741,11 @@ def ReadDeclaration(codeGenerator: peekable) -> identifier:
     type_ = None
     try:
         while token != ";":
-            token_list.append(token)
+            if token != "\n":
+                token_list.append(token)
             if IsIdentifier(token):
                 identifier_name = token_list.pop()
-                id = identifier(GetSubtype(codeGenerator, token_list), token)
+                id = identifier(GetSubtype(codeGenerator, token_list), identifier_name)
                 all_identifier[id.annotated_name] = id
                 return id
             token = next(codeGenerator)
@@ -618,18 +755,47 @@ def ReadDeclaration(codeGenerator: peekable) -> identifier:
     return id
 
 
-sample_code = [
-    "int const volatile (*a)[3];",
-    "int const volatile *a[3];",
-]
-samefile_code = ["int (*a)[3];"]
-C_init_list = "struct a {.a = 10, .b = 3.124};"
+def ReadTypedef(codeGenerator: peekable) -> tuple[str, C_type]:
+    token = next(codeGenerator)
+    token_list = []
+    id: identifier = None
+    try:
+        while token != ";":
+            token_list.append(token)
+            if IsIdentifier(token):
+                identifier_name = token_list.pop()
+                # id = identifier(GetSubtype(codeGenerator, token_list), token)
+                # all_identifier[id.annotated_name] = id
+                return identifier_name, GetSubtype(codeGenerator, token_list)
+            token = next(codeGenerator)
+    except StopIteration:
+        pass
 
-for s in sample_code:
-    TokenGen(s)
-    print(all_identifier["a"])
+    return id
 
 
+def Preprocessor(codeGenerator: peekable):
+    temp = ""
+    while codeGenerator.peek() != "#":
+        temp = next(codeGenerator)
+
+    pass
+
+
+codes = ""
+with open("b.h", "r") as fp:
+    codes = fp.read()
+
+    TokenGen(codes)
+    # print(all_identifier)
+    # print(all_identifier["a"])
+# print(all)
+for k, v in all_identifier.items():
+    print(v)
+
+print("typedef=============")
+for k, v in typedef_dict.items():
+    print(k, v)
 
 
 class Lexer:
