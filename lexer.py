@@ -40,7 +40,7 @@ class build_in_type(Enum):
 
 class C_type:
     def __init__(
-        self, type_: build_in_type, is_const_=False, is_volatile_=False, aka: str = ""
+        self, type_: build_in_type, aka: list[str],is_const_=False, is_volatile_=False, 
     ):
         self.type = type_
         self.is_const = is_const_
@@ -478,7 +478,14 @@ def SrtToType(type_str: str) -> build_in_type:
 def OmitToken(codes: str) -> Generator:
     token = ""
     bracket_stack = []
+    last_token = ""
     for c in codes:
+        #if c == "#":
+        #    while c != "\n":
+        #        if c == "\\":
+        #            c == next(codes)
+        #        c = next(codes)
+        #last_token = c
         if c in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM":
             token += c
         else:
@@ -511,36 +518,34 @@ typedef_dict: dict[str, C_type] = {}
 def TokenGen(codes: str):
     tokengen = peekable(OmitToken(codes))
     # print("hello,world")
+    global typedef_dict 
     peek_ = tokengen.peek()
     typedef_name = ""
     temp_type = None
+    had_typedef = False
+    #peek_token = next(tokengen)
+    token = next(tokengen)
     try:
-        while peek_ := tokengen.peek():
-            if peek_ in known_types:
-                ReadDeclaration(tokengen)
-            elif peek_ == "#":
-                # Preprocessor(tokengen)
+        while (peek_token := tokengen.peek()) != ";":
+            if token == "typedef":
+                had_typedef = True
+            if peek_token in known_types:
+                id_ = ReadDeclaration(tokengen)
+                token = next(tokengen)
+            
+                #if peek_token == "struct":
+                if had_typedef:
+                    while token != ";":
+                        typedef_dict[token] = id_
+
+                        token = next(tokengen)
+                    had_typedef = False
+            elif peek_token == "#":
                 pass
-            elif peek_ == "struct":
-                next(tokengen)
-                typedef_name, temp_type = ReadTypedef(tokengen)
-                while peek_ != ";":
-                    typedef_dict[peek_] = f"{typedef_name}"
-                    peek_ = next(tokengen)
-                # typed
+            elif peek_token in expression_keyword:
                 pass
-            elif peek_ == "typedef":
-                next(tokengen)
-                if temp_type is not None:
-                    peek_ = next(tokengen)
-                    while peek_ != ";":
-                        typedef_dict[peek_] = temp_type
-                        peek_ = next(tokengen)
-                    pass
-            elif peek_ in expression_keyword:
-                pass
-            else:
-                peek_ = next(tokengen)
+            
+            next(tokengen)
     except StopIteration:
         pass
 
@@ -629,7 +634,7 @@ def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
     temp_: str = ""
     bracket_content = ""
     argument_dict = {}
-    while token != ";":
+    while token not in [";", ","]:
 
         token_list.append(token)
 
@@ -653,15 +658,8 @@ def GetSubtype(codeGenerator: peekable, token_list: list[str]) -> C_type:
             return C_build_in_array(array_size, element_type)
 
         elif token == "(":
-            while token != ")":
-                token = next(codeGenerator)
-                token_list.append(token)
-
-            argument_list = ""
-            while (temp_ := token_list.pop()) != "(":
-                argument_list += temp_
-            id.type.argument_list = argument_list
-            break
+            pass 
+            #break
         elif token == ")":
             in_parathesis = []
             token_list.pop()
@@ -774,26 +772,23 @@ def ReadTypedef(codeGenerator: peekable) -> tuple[str, C_type]:
     return id
 
 
+""" ignore preprocess """
 def Preprocessor(codeGenerator: peekable):
     temp = ""
     while codeGenerator.peek() != "#":
         temp = next(codeGenerator)
-
     pass
 
 
 codes = ""
 with open("b.h", "r") as fp:
     codes = fp.read()
-
     TokenGen(codes)
-    # print(all_identifier)
-    # print(all_identifier["a"])
-# print(all)
+
 for k, v in all_identifier.items():
     print(v)
 
-print("typedef=============")
+print("==============================")
 for k, v in typedef_dict.items():
     print(k, v)
 
