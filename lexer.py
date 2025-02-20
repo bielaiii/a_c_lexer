@@ -665,27 +665,18 @@ class Lexer:
 
     def ReadDeclaration(self, codeGenerator: peekable) -> identifier:
         token = next(codeGenerator)
-        literal_: str = ""
-        type_ = None
-        is_ptr = False
-        count_l_char = 0
-        is_unsigned = 0
         token_list = []
         id: identifier = None
-        is_const_ = 0
-        is_volatile_ = 0
-        temp_: str = ""
-        type_ = None
         try:
             while token != ";":
                 if token != "\n":
                     token_list.append(token)
                 if self.IsIdentifier(token):
                     identifier_name = token_list.pop()
+                    
                     id = identifier(
                         self.GetType(codeGenerator, token_list), identifier_name
                     )
-                    #self.all_identifier[id.annotated_name] = id
                     return id
                 token = next(codeGenerator)
         except StopIteration:
@@ -693,9 +684,8 @@ class Lexer:
 
         return id
 
-    def ReadTypedef(self, codeGenerator: peekable) -> tuple[str, C_type]:
+    def ReadTypedef(self, codeGenerator: peekable, token_list : list[str]) -> tuple[str, C_type]:
         token = next(codeGenerator)
-        token_list = []
         id: identifier = None
         try:
             while token != ";":
@@ -786,9 +776,6 @@ class Lexer:
     def TokenGen(self, codes: str):
         tokengen = peekable(self.OmitToken(codes))
 
-        #self.PrintGenerator(tokengen)
-        #return 
-
         peek_token = tokengen.peek()
         typedef_name = ""
         temp_type = None
@@ -808,9 +795,13 @@ class Lexer:
                     used_type_ = build_in_type.DEFINED_STRUCT
                     id_ = self.ReadDeclaration(tokengen)
                     self.all_identifier[id_.annotated_name] = id_
-                    while (peek_token := tokengen.peek()) != ";":
-                        self.all_typedef[peek_token] = id_
-                        next(tokengen)
+                    if had_typedef:
+                        while (peek_token := tokengen.peek()) != ";":
+                            self.all_typedef[peek_token] = id_
+                            next(tokengen)
+                        assert save_token.pop() == "typedef"
+                        had_typedef = False
+                    
                 elif token == "union":
                     used_type_ = build_in_type.DEFINED_UNION
                     id_  = self.ReadDeclaration(tokengen)
@@ -821,7 +812,7 @@ class Lexer:
 
                     self.all_identifier[id_.annotated_name] = id_
                 
-                elif self.IsIdentifier(token):
+                elif had_typedef and self.IsIdentifier(token):
                     if token in self.all_identifier.keys():
                         # EXPRESSION
                         pass
@@ -834,12 +825,20 @@ class Lexer:
                             while (peek_token := tokengen.peek()) != ";":
                                 self.all_typedef[token] = temp_type
                                 next(tokengen)
+                            had_typedef = False
                         else:
                             pass
+                elif token in reserved_word:
+                    typedef_name, new_type_ = self.ReadTypedef(tokengen, save_token)
+                    self.all_typedef[typedef_name] = new_type_
+                    pass
 
 
                 if (used_type_ is not None and peek_token == "{"):
                     save_token.append(self.GenerateRandomName())
+                
+                if token == ";":
+                    assert len(save_token) == 1 and save_token.pop() == ";"
 
                 token = next(tokengen)
                 save_token.append(peek_token)
