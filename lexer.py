@@ -621,18 +621,18 @@ class Lexer:
                     if id is None and codeGenerator.peek() == "}":
                         break
                     argument_dict[id.annotated_name] = id
-                    #token = codeGenerator.peek()
-                #assert len(token_list) == 0, f"{token_list}"
+
                 using_type_ = None
-                if token_list[-1] == "struct":
-                    using_type_ = build_in_type.DEFINED_STRUCT
-                    token_list.pop()
-                elif token_list[-1] == "union":
-                    using_type_ = build_in_type.DEFINED_UNION
-                    token_list.pop()
-                elif token_list[-1] == "enum":
-                    using_type_ = build_in_type.DEFINED_ENUM
-                    token_list.pop()
+                if len(token_list) :
+                    if token_list[-1] == "struct":
+                        using_type_ = build_in_type.DEFINED_STRUCT
+                        token_list.pop()
+                    elif token_list[-1] == "union":
+                        using_type_ = build_in_type.DEFINED_UNION
+                        token_list.pop()
+                    elif token_list[-1] == "enum":
+                        using_type_ = build_in_type.DEFINED_ENUM
+                        token_list.pop()
                 return C_USER_DEFINED_TYPE(using_type_, argument_dict)
             elif token == "*":
                 if codeGenerator.peek() == "(":
@@ -650,8 +650,7 @@ class Lexer:
                         long_token = f"{next(codeGenerator)} {long_token}"
                 except StopIteration:
                     pass
-                #print(long_token)
-                #assert len(token_list) == 0, f"{token_list}"
+
                 return self.StringToEnum(long_token)
 
             token = next(codeGenerator)
@@ -660,7 +659,7 @@ class Lexer:
             token_list.reverse()
             newcodeGenerator = peekable(iter(token_list))
             return self.GetType(newcodeGenerator, [])
-        #assert len(token_list) == 0
+
         return None
 
     def ReadDeclaration(self, codeGenerator: peekable) -> identifier:
@@ -692,8 +691,7 @@ class Lexer:
                 token_list.append(token)
                 if self.IsIdentifier(token):
                     identifier_name = token_list.pop()
-                    # id = identifier(GetSubtype(codeGenerator, token_list), token)
-                    # all_identifier[id.annotated_name] = id
+                    
                     return identifier_name, self.GetType(codeGenerator, token_list)
                 token = next(codeGenerator)
         except StopIteration:
@@ -713,8 +711,8 @@ class Lexer:
         if code in self.all_identifier.keys():
             return False
         
-        if code in self.all_type.keys():
-            return False
+        #if code in self.all_type.keys():
+        #    return False
         if (temp := re.search(r"(^[a-zA-Z_][\w_]*?$)", code)) is not None:
             temp = temp.group(0)
             if temp == code:
@@ -756,7 +754,7 @@ class Lexer:
             ):
                 yield codes[i_]
             i_ += 1
-
+        yield ""
     #typedef_dict: dict[str, C_type] = {}
 
 
@@ -767,84 +765,54 @@ class Lexer:
         return random_name 
     
     def PrintGenerator(self, gen : Generator):
-        try:
-            while True:
-                print(next(gen))
-        except StopIteration:
-            pass
-
+        token = next(gen)
+        while token != "":
+            print(token)
+            token = next(gen)
+        
     def TokenGen(self, codes: str):
         tokengen = peekable(self.OmitToken(codes))
-
-        peek_token = tokengen.peek()
+        token = next(tokengen)
+        
+        #peek_token = tokengen.peek()
         typedef_name = ""
         temp_type = None
-        had_typedef = False
         id_ = None
         save_token = []
         name_ = ""
         bind_func = None
         used_type_ = None
-        token = ""
-        try:
-            while True:
-                if peek_token == "typedef":
-                    had_typedef = True
+        token = next(tokengen)
+        peek_token = tokengen.peek()
+        token_list : list[str] = []
+        is_typing = False
+        name_ = ""
+        define_type = False
 
-                if peek_token == "struct":
-                    used_type_ = build_in_type.DEFINED_STRUCT
-                    id_ = self.ReadDeclaration(tokengen)
-                    self.all_identifier[id_.annotated_name] = id_
-                    if had_typedef:
-                        while (peek_token := tokengen.peek()) != ";":
-                            self.all_typedef[peek_token] = id_
-                            next(tokengen)
-                        assert save_token.pop() == "typedef"
-                        had_typedef = False
-                    
-                elif token == "union":
-                    used_type_ = build_in_type.DEFINED_UNION
-                    id_  = self.ReadDeclaration(tokengen)
-                    self.all_identifier[id_.annotated_name] = id_
-                elif token == "enum":
-                    used_type_ = build_in_type.DEFINED_ENUM
-                    id_ = self.ReadDeclaration(tokengen)
+        while token != "":
+            if token == "typedef":
+                is_typing = False
+                define_type = True
+            elif self.IsIdentifier(token):
+                name_ = token
+            elif token == "struct":
+                using_type = build_in_type.DEFINED_STRUCT
+            elif token == "union":
+                using_type = build_in_type.DEFINED_UNION
+            elif token == "enum":
+                using_type = build_in_type.DEFINED_ENUM
+            
 
-                    self.all_identifier[id_.annotated_name] = id_
+            if 
+
+
+
                 
-                elif had_typedef and self.IsIdentifier(token):
-                    if token in self.all_identifier.keys():
-                        # EXPRESSION
-                        pass
-                    else:
-                        if had_typedef:
-                            #temp_type = 
-                            self.all_type[token] = RedefineType(token, self.GetType(tokengen, save_token))
-                            peek_token = tokengen.peek()
 
-                            while (peek_token := tokengen.peek()) != ";":
-                                self.all_typedef[token] = temp_type
-                                next(tokengen)
-                            had_typedef = False
-                        else:
-                            pass
-                elif token in reserved_word:
-                    typedef_name, new_type_ = self.ReadTypedef(tokengen, save_token)
-                    self.all_typedef[typedef_name] = new_type_
-                    pass
+            token = next(tokengen)
+            token_list.append(peek_token)
+            peek_token = tokengen.peek()
 
-
-                if (used_type_ is not None and peek_token == "{"):
-                    save_token.append(self.GenerateRandomName())
-                
-                if token == ";":
-                    assert len(save_token) == 1 and save_token.pop() == ";"
-
-                token = next(tokengen)
-                save_token.append(peek_token)
-                peek_token = tokengen.peek()
-        except StopIteration:
-            pass
 
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
