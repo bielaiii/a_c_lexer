@@ -42,18 +42,47 @@ class build_in_type(Enum):
         return True if self.value >= 14 else False
 
 
+def SetType(type_: str) -> build_in_type | str:
+    match (type_):
+        case "unsigned int":
+            return build_in_type.UNSIGNED_INT
+        case "int":
+            return build_in_type.INT
+        case "short":
+            return build_in_type.SHORT
+        case "unsigned short":
+            return build_in_type.UNSIGNED_SHORT
+        case "long":
+            return build_in_type.LONG
+        case "long long":
+            return build_in_type.LONG_LONG
+        case "unsigned long long":
+            return build_in_type.UNSIGNED_LONG_LONG
+        case "char":
+            return build_in_type.CHAR
+        case "signed char":
+            return build_in_type.SIGNED_CHAR
+        case "unsigned char":
+            return build_in_type.UNSIGNED_CHAR
+        case "double":
+            return build_in_type.DOUBLE
+        case "float":
+            return build_in_type.FLOAT
+        case _:
+            return type_
+
 class C_type:
     def __init__(
         self,
-        type_: build_in_type,
-        aka: list[str],
+        type_: str,
+        aka: str,
         is_const_=False,
         is_volatile_=False,
     ):
-        self.type = type_
+        self.type = SetType(type_)
         self.is_const = is_const_
         self.is_volatile = is_volatile_
-        self.aka = []
+        self.aka = aka
         # self.subtype = None
 
     def __str__(self) -> str:
@@ -152,7 +181,8 @@ class C_build_in_array(C_complex_type):
 class C_USER_DEFINED_TYPE(C_type):
     def __init__(
         self,
-        type_,
+        type_: C_type,
+        name_: str,
         argument_dict: dict,
         typedef_name: str = "",
         is_const_=False,
@@ -163,9 +193,12 @@ class C_USER_DEFINED_TYPE(C_type):
         super().__init__(type_, is_const_, is_volatile_, aka)
         self.argument_dict = argument_dict
         self.typedef_name = typedef_name
+        self.name = name_
 
     def __str__(self) -> str:
-        fmtstr = f"{self.type}  {f"aka : {self.aka}" if len(self.aka) != 0 else ""}\nmember:{{\n{"\n".join([f"{k} : {v}" for k, v in self.argument_dict.items()])}\n}}"
+        str_type = str(self.type)
+        str_type = str_type.replace("defined ", " ").replace("build in ", " ")
+        fmtstr = f"{str_type}  {f"aka : {self.aka}" if self.aka == "" else ""}\nmember:{{\n{"\n".join([f"{k} : {v}" for k, v in self.argument_dict.items()])}\n}}"
         return fmtstr
 
 
@@ -222,34 +255,7 @@ class C_function_ptr(C_USER_DEFINED_TYPE):
         )
 
 
-def SetType(type_: str) -> build_in_type | str:
-    match (type_):
-        case "unsigned int":
-            return build_in_type.UNSIGNED_INT
-        case "int":
-            return build_in_type.INT
-        case "short":
-            return build_in_type.SHORT
-        case "unsigned short":
-            return build_in_type.UNSIGNED_SHORT
-        case "long":
-            return build_in_type.LONG
-        case "long long":
-            return build_in_type.LONG_LONG
-        case "unsigned long long":
-            return build_in_type.UNSIGNED_LONG_LONG
-        case "char":
-            return build_in_type.CHAR
-        case "signed char":
-            return build_in_type.SIGNED_CHAR
-        case "unsigned char":
-            return build_in_type.UNSIGNED_CHAR
-        case "double":
-            return build_in_type.DOUBLE
-        case "float":
-            return build_in_type.FLOAT
-        case _:
-            return type_
+
 
 
 all_defined_type: dict[str, "UserDefineType"] = {}
@@ -325,8 +331,9 @@ class identifier:
         )
         return temp_str
 
+
 class RedefineType:
-    def __init__(self, name : str, type_ : C_type):
+    def __init__(self, name: str, type_: C_type):
         self.name = name
         self.type_ = type_
 
@@ -401,30 +408,35 @@ class Expression:
     def __init__(self, mode_: str):
         pass
 
+
 class Scope:
     def __init__(self):
         pass
 
 
-class Declaration():
+class Declaration:
+    def __init__(self):
+        pass
+
+    def TypeDeclaration(self):
+
+        pass
+
+
+class Expression:
     def __init__(self):
         pass
 
 
-class Expression():
+class Statement:
     def __init__(self):
         pass
 
-class Statement():
-    def __init__(self):
-        pass
 
-class FunctionBody():
+class FunctionBody:
     def __init__(self):
         pass
         self.body = []
-
-
 
 
 class Lexer:
@@ -558,7 +570,7 @@ class Lexer:
         temp_: str = ""
         bracket_content = ""
         argument_dict = {}
-        while token not in [";", ","]:
+        while codeGenerator.peek() not in [";", ","]:
 
             if token not in ["{", "}"]:
                 token_list.append(token)
@@ -579,7 +591,7 @@ class Lexer:
                     pass
                 else:
                     element_type = self.GetType(codeGenerator, token_list)
-                #assert len(token_list) == 0, f"{token_list}"
+                # assert len(token_list) == 0, f"{token_list}"
                 return C_build_in_array(array_size, element_type)
 
             elif token == "(":
@@ -600,7 +612,7 @@ class Lexer:
                     if temp_ == "volatile":
                         is_volatile_ = True
 
-                #assert len(token_list) == 0, f"{token_list}"
+                # assert len(token_list) == 0, f"{token_list}"
                 return C_build_in_pointer(
                     self.GetType(codeGenerator, token_list),
                     is_const_=is_const_,
@@ -623,7 +635,7 @@ class Lexer:
                     argument_dict[id.annotated_name] = id
 
                 using_type_ = None
-                if len(token_list) :
+                if len(token_list):
                     if token_list[-1] == "struct":
                         using_type_ = build_in_type.DEFINED_STRUCT
                         token_list.pop()
@@ -640,7 +652,7 @@ class Lexer:
                 current_type = C_build_in_pointer(
                     self.GetType(codeGenerator, token_list)
                 )
-                #assert len(token_list) == 0, f"{token_list}"
+                # assert len(token_list) == 0, f"{token_list}"
                 return current_type
 
             elif token in self.frament_type_key:
@@ -658,6 +670,7 @@ class Lexer:
         if len(token_list):
             token_list.reverse()
             newcodeGenerator = peekable(iter(token_list))
+            token_list = []
             return self.GetType(newcodeGenerator, [])
 
         return None
@@ -666,24 +679,35 @@ class Lexer:
         token = next(codeGenerator)
         token_list = []
         id: identifier = None
-        try:
-            while token != ";":
-                if token != "\n":
-                    token_list.append(token)
-                if self.IsIdentifier(token):
-                    identifier_name = token_list.pop()
-                    
-                    id = identifier(
-                        self.GetType(codeGenerator, token_list), identifier_name
-                    )
+        while token != ";":
+            if token != "\n":
+                token_list.append(token)
+            if self.IsIdentifier(token):
+                identifier_name = token_list.pop()
+
+                id = identifier(
+                    self.GetType(codeGenerator, token_list), identifier_name
+                )
+                try:
+                    token = next(codeGenerator)
+                    while token != ";":
+                        # assert token in ["const", "volatile"]
+                        if token == "const":
+                            id.is_const = True
+                        elif token == "volatile":
+                            id.is_volatile = True
+                        else:
+                            raise AssertionError("looks something is incorrect")
                     return id
-                token = next(codeGenerator)
-        except StopIteration:
-            pass
+                except StopIteration:
+                    return id
+            token = next(codeGenerator)
 
         return id
 
-    def ReadTypedef(self, codeGenerator: peekable, token_list : list[str]) -> tuple[str, C_type]:
+    def ReadTypedef(
+        self, codeGenerator: peekable, token_list: list[str]
+    ) -> tuple[str, C_type]:
         token = next(codeGenerator)
         id: identifier = None
         try:
@@ -691,7 +715,7 @@ class Lexer:
                 token_list.append(token)
                 if self.IsIdentifier(token):
                     identifier_name = token_list.pop()
-                    
+
                     return identifier_name, self.GetType(codeGenerator, token_list)
                 token = next(codeGenerator)
         except StopIteration:
@@ -710,8 +734,8 @@ class Lexer:
 
         if code in self.all_identifier.keys():
             return False
-        
-        #if code in self.all_type.keys():
+
+        # if code in self.all_type.keys():
         #    return False
         if (temp := re.search(r"(^[a-zA-Z_][\w_]*?$)", code)) is not None:
             temp = temp.group(0)
@@ -722,13 +746,12 @@ class Lexer:
         else:
             return False
 
-
-
-
     def OmitToken(self, codes: str) -> Generator[str, any, any]:
         token = ""
         len_ = len(codes)
         i_ = 0
+        ret_lst: list[str] = []
+        bracket_lst: list[str] = []
         while i_ < len_:
             while (
                 i_ < len_
@@ -739,7 +762,8 @@ class Lexer:
                 i_ += 1
 
             if token != "":
-                yield token
+                # yield token
+                ret_lst.append(token)
                 token = ""
             if codes[i_] in ["\t", " ", "\b", "\n"]:
                 pass
@@ -748,33 +772,87 @@ class Lexer:
                     if codes[i_] == "\\":
                         i_ += 1
                     i_ += 1
+            elif codes[i_] == "/":
+                if codes[i_ + 1] == "/":
+                    while i_ < len_ and codes[i_] != "\n":
+                        i_ += 1
+                    i_ += 1
+                elif codes[i_ + 1] == "*":
+                    while i_ < len_ and codes[i_] != "*" and codes[i_ + 1] != "/":
+                        i_ += 1
+                    i_ += 2
+                continue
+            elif "{" == codes[i_]:
+                bracket_lst.append("{")
+                ret_lst.append(codes[i_])
+            elif "}" == codes[i_]:
+                bracket_lst.pop()
+                ret_lst.append(codes[i_])
             elif (
                 codes[i_]
                 not in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
             ):
-                yield codes[i_]
+                ret_lst.append(codes[i_])
+                # yield codes[i_]
+
+            if codes[i_] == ";" and len(bracket_lst) == 0:
+                # yield codes[i_]
+                a = 0
+                yield ret_lst
+
+                ret_lst = []
             i_ += 1
-        yield ""
-    #typedef_dict: dict[str, C_type] = {}
 
+    def OmitSentence(self, codes: str) -> Generator[peekable, any, any]:
+        token = peekable(self.OmitToken(codes))
+        lst: list[str] = []
+        record_scope: list[str] = ["("]
+        try:
+            while (peek_ := token.peek()) != "":
+                while (
+                    token.peek() != ";"
+                    and (len(record_scope) != 0 and record_scope[-1] != "}")
+                    # or (len(lst) != 0 and lst[-1] != ";")
+                ):
+                    if peek_ == "{":
+                        record_scope.append("{")
+                    elif peek_ == "}":
+                        if record_scope[-1] == "{":
+                            record_scope.pop()
+                    lst.append(next(token))
+                    # lst.append(next(token))
 
-    def GenerateRandomName(self) -> str: 
-        random_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+                yield peekable(lst)
+                lst = []
+        except StopIteration:
+            pass
+
+    def GenerateRandomName(self) -> str:
+        random_name = "".join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+        )
         while random_name in self.all_type.keys():
-            random_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-        return random_name 
-    
-    def PrintGenerator(self, gen : Generator):
+            random_name = "".join(
+                random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+            )
+        return random_name
+
+    def PrintGenerator(self, gen: Generator):
         token = next(gen)
         while token != "":
             print(token)
             token = next(gen)
-        
-    def TokenGen(self, codes: str):
-        tokengen = peekable(self.OmitToken(codes))
-        token = next(tokengen)
-        
-        #peek_token = tokengen.peek()
+
+    def ConcatTwo(self, lst: list, gen: peekable) -> Generator:
+        new_gen = peekable(lst)
+        for l in new_gen:
+
+            yield l
+        lst = []
+        for l in gen:
+            yield l
+
+    def GeneratorToToken(self, tokengen: list[str]):
         typedef_name = ""
         temp_type = None
         id_ = None
@@ -782,45 +860,267 @@ class Lexer:
         name_ = ""
         bind_func = None
         used_type_ = None
-        token = next(tokengen)
         peek_token = tokengen.peek()
-        token_list : list[str] = []
+        token_list: list[str] = []
         is_typing = False
         name_ = ""
         define_type = False
-
-        while token != "":
-            if token == "typedef":
-                is_typing = False
-                define_type = True
-            elif self.IsIdentifier(token):
+        left = 0
+        right = 0
+        token = tokengen.peek()
+        # try:
+        while tokengen:
+            if self.IsIdentifier(token):
                 name_ = token
             elif token == "struct":
-                using_type = build_in_type.DEFINED_STRUCT
+                next(tokengen)
+                if (peek_ := tokengen.peek()) == "{" or (
+                    self.IsIdentifier(peek_)
+                    and (
+                        peek_
+                        not in self.known_types.keys()
+                        # or peek_ not in self.all_identifier.keys()
+                    )
+                ):
+                    using_type = build_in_type.DEFINED_STRUCT
+                    id_ = next(tokengen)
+                    if id_ == "{":
+                        id_ = self.GenerateRandomName()
+                    argument_dict = {}
+                    while token != "}":
+                        id_ = self.ReadDeclaration(tokengen)
+                        argument_dict[id_.annotated_name] = id_
+                        token = next(tokengen)
+
+                    self.all_type[id_] = C_USER_DEFINED_TYPE(
+                        using_type, f"struct::{name_}", argument_dict
+                    )
+
+                    self.ReadDeclaration(tokengen)
             elif token == "union":
                 using_type = build_in_type.DEFINED_UNION
             elif token == "enum":
                 using_type = build_in_type.DEFINED_ENUM
-            
 
-            if 
+            if define_type:
+                new_type = self.ReadDeclaration()
 
+            if self.IsIdentifier(token):
+                if token in self.all_identifier.keys():
+                    # no decleration
+                    pass
+                else:
+                    self.ReadDeclaration(tokengen)
 
-
-                
-
-            token = next(tokengen)
+            # token = next(tokengen)
             token_list.append(peek_token)
-            peek_token = tokengen.peek()
+            next(tokengen)
+            token = tokengen.peek()
+        # except StopIteration:
+        #    raise AssertionError("what can be return")
 
+    def PrintPeekable(self, pr_: peekable):
+        try:
+            while True:
+
+                print(pr_.peek())
+                next(pr_)
+        except StopIteration:
+            print("=================")
+
+    def GetIdenfitiferIndex(self, token_list: list[str]):
+        idx_ = 0
+        len_ = len(token_list)
+        while idx_ < len_:
+            if token_list[idx_] not in self.all_type.keys() and self.IsIdentifier(
+                token_list[idx_]
+            ):
+                return idx_
+            elif token_list[idx_ + 1] == "{" and token_list[idx_] in [
+                "struct",
+                "union",
+                "enum",
+            ]:
+                return idx_
+            idx_ += 1
+
+    def ReadDeclerationList(self, token_list: list[str], left: int, right: int):
+        len_ = len(token_list)
+        while right < len_ or left >= 0:
+            while right < len_:
+                if token_list[right] == "(":
+                    assert (
+                        token_list[left] in reserved_word
+                        or token_list[left] in self.all_type.keys()
+                        or token_list[left] == "*"
+                    ), f"{token_list[left]} is unexpected"
+                    if token_list[left] == "*":
+                        # function pointer
+                        pass
+                    else:
+                        pass
+                elif token_list[right] == "[":
+                    array_size_ = ""
+                    while right < len_ and token_list[right] != "]":
+                        array_size_ += token_list[right]
+                        right += 1
+                    return C_build_in_array(
+                        array_size_, self.ReadDeclerationList(token_list, left, right)
+                    )
+                elif token_list[right] == ")":
+                    pass
+                right+=1
+            if left >= 0:
+
+                if token_list[left] == "*":
+                    return C_build_in_pointer(
+                        self.ReadDeclerationList(token_list, left - 1, right)
+                    )
+                elif token_list[left] in reserved_word:
+                    return C_type(token_list[left], "")
+
+    def ReadRecleration2(self, token_list: list[str], left: int, right: int):
+        len_ = len(token_list)
+        # mid_ = self.GetIdenfitiferIndex(token_list)
+        # left = mid_ - 1
+        # right = mid_ + 1
+        i_ = 0
+        while right < len_ or left >= 0:
+            if right < len_:
+                if token_list[right] == "(":
+                    assert (
+                        token_list[left] in reserved_word
+                        or token_list[left] in self.all_type.keys()
+                        or token_list[left] == "*"
+                    ), f"{token_list[left]} is unexpected"
+                    if token_list[left] == "*":
+                        # function pointer
+                        pass
+                    else:
+                        pass
+                elif token_list[right] == "[":
+                    array_size_ = ""
+                    right+=1
+                    while right < len_ and token_list[right] != "]":
+                        array_size_ += token_list[right]
+                        right += 1
+                    return C_build_in_array(
+                        array_size_, self.ReadDeclerationList(token_list, left, right)
+                    )
+                elif token_list[right] == ")":
+                    pass
+            if left >= 0:
+
+                if token_list[left] == "*":
+                    return C_build_in_pointer(
+                        self.ReadDeclerationList(token_list, left - 1, right)
+                    )
+                elif token_list[left] in reserved_word:
+                    return C_type(token_list[left], "")
+
+    def ReadIdDecleration(self, token_lst: list[str]):
+        identifier_idx = self.GetIdenfitiferIndex(token_lst)
+        if token_lst[identifier_idx] in ["union", "struct", "enum"]:
+            self.ReadUserDefinedType(token_lst)
+            ##print(lst)
+        else:
+            temp_type = self.ReadRecleration2(
+                token_lst, identifier_idx - 1, identifier_idx + 1
+            )
+            # self.all_identifier[lst[identifier_idx]] = identifier(temp_type, lst[identifier_idx])
+            return identifier(temp_type, token_lst[identifier_idx])
+        # pass
+
+    def ReadUserDefinedType(self, token_list: str):
+        # split_ = token_list.split(";")
+        # print(split_)
+        argument_dict: dict[str, identifier] = {}
+        i_ = 0
+        len_ = len(token_list)
+        struct_name = ""
+        user_define_ = ""
+        while i_ < len_ and token_list[i_] != "{":
+            if token_list[i_] == "struct" and token_list[i_ + 1] == "{":
+                struct_name = self.GenerateRandomName()
+            elif self.IsIdentifier(token_list[i_]) and token_list[i_ - 1] in [
+                "union",
+                "enum",
+                "struct",
+            ]:
+                struct_name = token_list[i_]
+
+            if token_list[i_] == "struct":
+                user_define_ = build_in_type.DEFINED_STRUCT
+            elif token_list[i_] == "union":
+                user_define_ = build_in_type.DEFINED_UNION
+            elif token_list[i_] == "enum":
+                user_define_ = build_in_type.DEFINED_ENUM
+            i_ += 1
+        i_ += 1
+        while i_ < len_ and token_list[i_] != "}":
+            r = i_
+            while r < len_ and token_list[r] != ";":
+                r += 1
+            temp_list = token_list[i_ : r + 1]
+            i_ = r + 1
+            id_ = self.ReadIdDecleration(temp_list)
+            argument_dict[id_.annotated_name] = id_
+        assert user_define_ != "", "unknown type"
+
+        return C_USER_DEFINED_TYPE(user_define_, struct_name, argument_dict, aka= "")
+
+    def TokenDispatch(self, codes: str):
+
+        sentence_gen = self.OmitToken(codes)
+        for lst in sentence_gen:
+
+            identifier_idx = self.GetIdenfitiferIndex(lst)
+            if lst[identifier_idx] in ["union", "struct", "enum"]:
+                temp_type = self.ReadUserDefinedType(lst)
+                self.all_type[temp_type.name] = temp_type
+            else:
+                temp_type = self.ReadRecleration2(
+                    lst, identifier_idx - 1, identifier_idx + 1
+                )
+                self.all_identifier[lst[identifier_idx]] = identifier(
+                    temp_type, lst[identifier_idx]
+                )
+
+        for k, v in self.all_identifier.items():
+            print(v)
+
+        for k, v in self.all_type.items():
+            print(v)
+        ##self.GeneratorToToken(next(sentence_gen))
+        """
+        ll = peekable(lst)
+        self.PrintPeekable(ll)
+        """
+
+        """                 try:
+                    while True:
+                        print(ll.peek())
+                        next(ll)
+        """
+        # print("============") """
+
+        # self.PrintGenerator(peekable(lst))
+        # self.PrintGenerator(pe_)
+        # pe_ = peekable(pe_)
+        # self.GeneratorToToken(pe_)
+
+        # return
+        # self.PrintGenerator(tokengen)
+        # return
 
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
-            self.TokenGen(codes)
+            self.TokenDispatch(codes)
 
-        for k ,v in self.all_type.items():
+        for k, v in self.all_type.items():
             print(f"{k}, {v}")
+
 
 def Preprocessor(codeGenerator: peekable):
     temp = ""
@@ -832,4 +1132,4 @@ def Preprocessor(codeGenerator: peekable):
 if __name__ == "__main__":
     parser_ = Lexer()
     # parser_.To
-    parser_.ParseFile("b.h")
+    parser_.ParseFile("a.c")
