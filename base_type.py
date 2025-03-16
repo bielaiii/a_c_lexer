@@ -23,7 +23,7 @@ class build_in_type(Enum):
     CALL_FUNCTION = auto()
 
     def __str__(self):
-        temp_str = self.name.lower().replace("_", " ")
+        temp_str = self.name.lower().replace("_", " ").replace("build in ", "")
 
         return temp_str
 
@@ -68,11 +68,11 @@ class C_type:
     def __init__(
         self,
         type_: str,
-        aka: str,
+        aka: str = "",
         is_const_=False,
         is_volatile_=False,
     ):
-        self.type = SetType(type_)
+        self.type_ = SetType(type_)
         self.is_const = is_const_
         self.is_volatile = is_volatile_
         self.aka = aka
@@ -86,10 +86,25 @@ class C_type:
         if self.is_volatile:
             quan_ += "volatile "
 
-        return f"{quan_}{self.type}"
+        return f"{quan_}{self.type_}"
 
     def GetMember() -> list[tuple[str, "C_type"]]:
         pass
 
     def is_cv(self) -> bool:
         return self.is_const and self.is_volatile
+
+    def is_user_defined(self) -> bool:
+        return (
+            True
+            if self.type_
+            in [
+                build_in_type.DEFINED_ENUM,
+                build_in_type.DEFINED_STRUCT,
+                build_in_type.DEFINED_UNION,
+            ]
+            else False
+        )
+
+    def single_value(self):
+        pass
