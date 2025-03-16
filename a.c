@@ -12,5 +12,4 @@ typedef struct {
     float (*ptr)[3][3];
 } bar;
 
-
-bar b = {0, 1, 2, 0};
+bar b = {1, 2, 3, 4,};

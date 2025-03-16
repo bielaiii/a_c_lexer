@@ -1,13 +1,8 @@
-from enum import Enum, auto
 import random
 import re
 import string
-from tracemalloc import start
+import token
 from typing import Generator
-from more_itertools import peekable
-import uuid
-import more_itertools
-from functools import partial
 import reserved_word
 from base_type import *
 from type_class import *
@@ -16,29 +11,10 @@ from type_class import *
 class identifier:
     all_identifier: dict[str, "identifier"] = {}
 
-    def __set_value(self, val=None):
-        if self.type_.is_user_defined():
-            return ""
-
-    """ def __init_field_dict(self):
-        if self.type_.is_user_defined():
-            ret : dict[str, identifier] = {}
-            for k_, v_ in self.type_.field_.items():
-                if v_.type_.is_user_defined():
-                    ret[k_] = self.type_
-                else:
-                    ret[k_] = None
-        
-        elif self.type_ == build_in_type.BUILD_IN_ARRAY:
-            ret : dict[int, identifier]
-            return {x : None for x in range(self.type_.__size())}
-        else:
-            return None """
-
     def __init__(self, typename: C_type, varname: str, val=None):
         self.type_: C_AnyType = typename
         self.annotated_name = varname
-        
+
         self.value: dict | int | str = val
         identifier.all_identifier[self.annotated_name] = self
         self.is_const = False
@@ -48,7 +24,6 @@ class identifier:
             self.value = self.type_.init_param_dict()
         else:
             self.value = None
-        
 
     def __str__(self) -> str:
         temp_str = ""
@@ -78,6 +53,20 @@ class identifier:
                 new_start += 1
 
         return new_start
+
+    def print_value(self):
+        if not isinstance(self.value, dict):
+            return f"{self.annotated_name} = {self.value}"
+        ret_str = []
+        for k_, v_ in self.value.items():
+            if isinstance(v_, dict):
+                temp = []
+                for kk_, vv_ in v_.items():
+                    temp.append(f".{vv_.print_value()}")
+                ret_str.append(f".{k_}={{{",".join(temp)}}}")
+            else:
+                ret_str.append(f".{v_.print_value()}")
+        return f"{{{",".join(ret_str)}}}"
 
     def stringnify_value(self):
         if not self.type_.is_user_defined():
@@ -232,7 +221,7 @@ class Lexer:
     def StartDeleration(self, code: str) -> str:
         pass
 
-    def IsIdentifier(self, code: str) -> False:
+    def is_identifier(self, code: str) -> False:
         if code in reserved_word.reserved_word:
             return False
 
@@ -247,7 +236,6 @@ class Lexer:
                 return False
         else:
             return False
-
 
     def GenerateRandomName(self) -> str:
         random_name = "".join(
@@ -266,7 +254,7 @@ class Lexer:
             if (
                 token_list[idx_] not in self.all_type.keys()
                 and token_list[idx_] not in self.all_typedef.keys()
-                and self.IsIdentifier(token_list[idx_])
+                and self.is_identifier(token_list[idx_])
             ):
                 return idx_
             elif token_list[idx_ + 1] == "{" and token_list[idx_] in [
@@ -388,7 +376,7 @@ class Lexer:
             temp_type = self.ReadRecleration2(
                 token_lst, identifier_idx - 1, identifier_idx + 1
             )
-            return member_field(token_lst[identifier_idx], temp_type )
+            return member_field(token_lst[identifier_idx], temp_type)
 
     def read_another_typedef(self, i_: int, token_list: list[str], target_type):
         typedef_name = []
@@ -407,6 +395,89 @@ class Lexer:
                 )
             i_ += 1
 
+    def early_return(self, token_list: list[str]) -> bool:
+        i_ = 0
+        len_ = len(token_list)
+        while i_ < len_ and token_list[i_] != "(":
+            i_ += 1
+        if i_ >= len_:
+            return False
+        i_ -= 1
+        if not self.is_identifier(token_list[i_]):
+            return False
+
+        i_ -= 1
+
+        if not (
+            token_list[i_] in reserved_word.frament_type_key or token_list[i_] == "*"
+        ):
+            return False
+
+        if (
+            token_list[i_] == "*"
+            and token_list[i_ - 1] in reserved_word.frament_type_key
+        ):
+            return True
+
+    def OmitToken(self, codes: str) -> Generator[str, any, any]:
+        token = ""
+        len_ = len(codes)
+        i_ = 0
+        ret_lst: list[str] = []
+        bracket_lst: list[str] = []
+        while i_ < len_:
+            while (
+                i_ < len_
+                and codes[i_]
+                in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
+            ):
+                token += codes[i_]
+                i_ += 1
+
+            if token != "":
+                # yield token
+                ret_lst.append(token)
+                token = ""
+            if codes[i_] in ["\t", " ", "\b", "\n"]:
+                pass
+            elif codes[i_] == "#":
+                while i_ < len_ and codes[i_] != "\n":
+                    if codes[i_] == "\\":
+                        i_ += 1
+                    i_ += 1
+            elif codes[i_] == "/":
+                if codes[i_ + 1] == "/":
+                    while i_ < len_ and codes[i_] != "\n":
+                        i_ += 1
+                    i_ += 1
+                elif codes[i_ + 1] == "*":
+                    while i_ < len_ and codes[i_] != "*" and codes[i_ + 1] != "/":
+                        i_ += 1
+                    i_ += 2
+                continue
+            elif "{" == codes[i_]:
+                bracket_lst.append("{")
+                ret_lst.append(codes[i_])
+            elif "}" == codes[i_]:
+                bracket_lst.pop()
+                ret_lst.append(codes[i_])
+            elif (
+                codes[i_]
+                not in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
+            ):
+                ret_lst.append(codes[i_])
+
+            if codes[i_] == ";" and len(bracket_lst) == 0:
+                a = 0
+                yield ret_lst
+                ret_lst = []
+            #elif len(bracket_lst) == 0 and len(ret_lst):
+            #    yield ret_lst
+            #    ret_lst = []
+            i_ += 1
+        if len(ret_lst) != 0:
+            yield ret_lst
+
     def ReadUserDefinedType(self, token_list: str):
         argument_dict: dict[str, identifier] = {}
         i_ = 0
@@ -416,7 +487,7 @@ class Lexer:
         while i_ < len_ and token_list[i_] != "{":
             if token_list[i_] == "struct" and token_list[i_ + 1] == "{":
                 struct_name = self.GenerateRandomName()
-            elif self.IsIdentifier(token_list[i_]) and token_list[i_ - 1] in [
+            elif self.is_identifier(token_list[i_]) and token_list[i_ - 1] in [
                 "union",
                 "enum",
                 "struct",
@@ -455,13 +526,17 @@ class Lexer:
                 i_ += 1
                 if token_list[i_] == "{":
                     return True
-                elif self.IsIdentifier(token_list[i_]):
+                elif self.is_identifier(token_list[i_]):
                     if f"struct_{token_list[i_]}" not in self.all_type.keys():
                         return True
                 return False
             if token_list[i_] in self.all_typedef.keys():
                 return False
         return False
+
+    def is_function_decleration(self, token_list: list[str]):
+
+        pass
 
     def TokenDispatch(self, codes: str):
 
@@ -471,11 +546,9 @@ class Lexer:
             if self.is_type_decleration(lst):
                 temp_type = self.ReadUserDefinedType(lst)
                 self.all_type[temp_type.name] = temp_type
-                """ if len(temp_type.typedef_name):
 
-                    for t_ in temp_type.typedef_name:
-                        self.all_typedef[t_] = temp_type
-                    temp_type.aka = "" """
+            elif self.is_function_decleration(lst):
+                pass
             else:
                 temp_type = self.ReadRecleration2(
                     lst, identifier_idx - 1, identifier_idx + 1
@@ -484,11 +557,9 @@ class Lexer:
 
                 self.all_identifier[lst[identifier_idx]] = cur_identifier
 
-        
-
         val_list = [1, 2, 3, 4, 5]
         self.all_identifier["b"].initialize_list(val_list, 0)
-
+        print(self.all_identifier["b"].print_value())
 
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
@@ -497,13 +568,6 @@ class Lexer:
 
         for k, v in self.all_type.items():
             print(f"{k}, {v}")
-
-
-def Preprocessor(codeGenerator: peekable):
-    temp = ""
-    while codeGenerator.peek() != "#":
-        temp = next(codeGenerator)
-    pass
 
 
 if __name__ == "__main__":
