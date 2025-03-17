@@ -69,28 +69,33 @@ class C_build_in_array(C_type):
         aka: str = "",
     ):
         super().__init__(build_in_type.BUILD_IN_ARRAY, aka, is_const, is_volatile)
-        self.__size = int(size_)
+        try:
+            self.__size = int(size_)
+        except ValueError:
+            self.__size = 10
         self.__element_type = element_type_
 
-        self.value: dict[int, identifier] = {x : None for x in range(self.__size)}
 
     def Size(self) -> int:
         return self.__size
+    
+    def init_param_dict(self) -> dict[str, identifier]:
+        return {x : identifier(self.__element_type, x, None) for x in range(self.__size)}
 
     def __setitem__(self, key: int, val: any):
         assert isinstance(key, int)
-        self.argument_dict[key] = val
+        self.value[key] = val
 
     def __getitem__(self, key: int):
         assert isinstance(key, int)
-        return self.argument_dict[key]
+        return self.value[key]
 
     def __str__(self):
         return f"{super().__str__()} of {self.__size} of {self.__element_type}"
 
-    def __format__(self, format_spec):
+    """ def __format__(self, format_spec):
         temp_str = f"{{{",".join([str(x) for x in self.value])}}}"
-        return super().__format__(format_spec)
+        return super().__format__(format_spec) """
 
     def print_element(self):
         return f""
@@ -147,6 +152,14 @@ class CompositeType(C_type):
             else:
                 ret[k_] = identifier(v_.type_, k_)
         return ret
+    
+    def __setitem__(self, key: int, val: any):
+        #assert isinstance(key, int)
+        self.field_[key] = val
+
+    def __getitem__(self, key: int):
+        #assert isinstance(key, int)
+        return self.field_[key]
 
 
 class C_struct(CompositeType):

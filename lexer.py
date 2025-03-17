@@ -22,6 +22,8 @@ class identifier:
 
         if self.type_.is_user_defined():
             self.value = self.type_.init_param_dict()
+        elif self.type_.type_ == build_in_type.BUILD_IN_ARRAY:
+            self.value = self.type_.init_param_dict()
         else:
             self.value = None
 
@@ -44,11 +46,14 @@ class identifier:
             return start_idx
         new_start = start_idx
         v_: C_AnyType
-        for _, v_ in self.value.items():
+        for k_, v_ in self.value.items():
             if isinstance(v_, dict):
-                for _, vv_ in v_.items():
+                for kk_, vv_ in v_.items():
                     new_start = vv_.initialize_list(token_list, new_start)
+            elif v_.type_.type_ == build_in_type.BUILD_IN_ARRAY:
+                new_start = v_.initialize_list(token_list, new_start)
             else:
+
                 v_.value = token_list[new_start]
                 new_start += 1
 
@@ -557,7 +562,7 @@ class Lexer:
 
                 self.all_identifier[lst[identifier_idx]] = cur_identifier
 
-        val_list = [1, 2, 3, 4, 5]
+        val_list = [1, 2, 3, 4, 5, 6, 7, 8]
         self.all_identifier["b"].initialize_list(val_list, 0)
         print(self.all_identifier["b"].print_value())
 
