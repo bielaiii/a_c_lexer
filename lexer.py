@@ -12,7 +12,7 @@ class identifier:
     all_identifier: dict[str, "identifier"] = {}
 
     def __init__(self, typename: C_type, varname: str, val=None):
-        self.type_: C_AnyType = typename
+        self.type_: C_type = typename
         self.annotated_name = varname
 
         self.value: dict | int | str = val
@@ -20,16 +20,16 @@ class identifier:
         self.is_const = False
         self.is_volatile = False
 
-        if self.type_.is_user_defined():
+        if self.type_.is_composite_type():
             self.value = self.type_.init_param_dict()
-        elif self.type_.type_ == build_in_type.BUILD_IN_ARRAY:
+        elif self.type_.using_type == build_in_type.BUILD_IN_ARRAY:
             self.value = self.type_.init_param_dict()
         else:
             self.value = None
 
     def __str__(self) -> str:
         temp_str = ""
-        if self.type_.is_user_defined():
+        if self.type_.is_composite_type():
             temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
         elif self.type_ == build_in_type.BUILD_IN_ARRAY:
             temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : "
@@ -45,12 +45,12 @@ class identifier:
             start_idx += 1
             return start_idx
         new_start = start_idx
-        v_: C_AnyType
+        v_: C_type
         for k_, v_ in self.value.items():
             if isinstance(v_, dict):
                 for kk_, vv_ in v_.items():
                     new_start = vv_.initialize_list(token_list, new_start)
-            elif v_.type_.type_ == build_in_type.BUILD_IN_ARRAY:
+            elif v_.using_type.type_ == build_in_type.BUILD_IN_ARRAY:
                 new_start = v_.initialize_list(token_list, new_start)
             else:
 
@@ -74,7 +74,7 @@ class identifier:
         return f"{{{",".join(ret_str)}}}"
 
     def stringnify_value(self):
-        if not self.type_.is_user_defined():
+        if not self.type_.is_composite_type():
             return self.value
         elif self.type_ == build_in_type.BUILD_IN_POINTER:
             return f"nullptr"
@@ -83,11 +83,11 @@ class identifier:
             return f"{{{",".join(str_values)} }}"
 
     def __setitem__(self, key: str, value):
-        assert self.type_.is_user_defined()
+        assert self.type_.is_composite_type()
         self.value[key] = value
 
     def __getitem__(self, key: str):
-        assert self.type_.is_user_defined()
+        assert self.type_.is_composite_type()
         return self.value[key]
 
 
@@ -338,8 +338,11 @@ class Lexer:
                     while right < len_ and token_list[right] != "]":
                         array_size_ += token_list[right]
                         right += 1
+                    
+                    #element_type =self.ReadRecleration2(token_list, left, right + 1)self.ReadRecleration2(token_list, left, right + 1) 
+                    
                     return CTypeFactory.get_array(
-                        self.ReadRecleration2(token_list, left, right + 1), array_size_
+                       self.ReadRecleration2(token_list, left, right + 1), array_size_
                     )
 
                 elif token_list[right] == ")":
@@ -383,7 +386,9 @@ class Lexer:
             )
             return member_field(token_lst[identifier_idx], temp_type)
 
-    def read_another_typedef(self, i_: int, token_list: list[str], target_type):
+    def read_another_typedef(
+        self, i_: int, token_list: list[str], target_type: C_type
+    ):
         typedef_name = []
         i_ += 1
         len_ = len(token_list)
@@ -391,13 +396,11 @@ class Lexer:
             if token_list[i_] == "*":
                 i_ += 1
                 self.all_typedef[token_list[i_]] = CTypeFactory.get_pointer(
-                    CTypeFactory(target_type.name)
+                    CTypeFactory(target_type)
                 )
             else:
                 typedef_name.append(token_list[i_])
-                self.all_typedef[token_list[i_]] = CTypeFactory.auto_call_method(
-                    target_type.type_, target_type.name
-                )
+                self.all_typedef[token_list[i_]] = target_type
             i_ += 1
 
     def early_return(self, token_list: list[str]) -> bool:
@@ -476,7 +479,7 @@ class Lexer:
                 a = 0
                 yield ret_lst
                 ret_lst = []
-            #elif len(bracket_lst) == 0 and len(ret_lst):
+            # elif len(bracket_lst) == 0 and len(ret_lst):
             #    yield ret_lst
             #    ret_lst = []
             i_ += 1
@@ -548,6 +551,7 @@ class Lexer:
         sentence_gen = self.OmitToken(codes)
         for lst in sentence_gen:
             identifier_idx = self.GetIdenfitiferIndex(lst)
+            print(lst)
             if self.is_type_decleration(lst):
                 temp_type = self.ReadUserDefinedType(lst)
                 self.all_type[temp_type.name] = temp_type
@@ -571,7 +575,7 @@ class Lexer:
             codes = fp.read()
             self.TokenDispatch(codes)
 
-        for k, v in self.all_type.items():
+        for k, v in self.all_typedef.items():
             print(f"{k}, {v}")
 
 

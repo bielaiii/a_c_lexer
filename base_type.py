@@ -72,7 +72,7 @@ class C_type:
         is_const_=False,
         is_volatile_=False,
     ):
-        self.type_ = SetType(type_)
+        self.using_type = SetType(type_)
         self.is_const = is_const_
         self.is_volatile = is_volatile_
         self.aka = aka
@@ -86,7 +86,7 @@ class C_type:
         if self.is_volatile:
             quan_ += "volatile "
 
-        return f"{quan_}{self.type_}"
+        return f"{quan_}{self.using_type}"
 
     def GetMember() -> list[tuple[str, "C_type"]]:
         pass
@@ -97,11 +97,24 @@ class C_type:
     def is_user_defined(self) -> bool:
         return (
             True
-            if self.type_
+            if self.using_type
             in [
                 build_in_type.DEFINED_ENUM,
                 build_in_type.DEFINED_STRUCT,
                 build_in_type.DEFINED_UNION,
+            ]
+            else False
+        )
+    
+    def is_composite_type(self) -> bool:
+        return (
+            True
+            if self.using_type
+            in [
+                build_in_type.DEFINED_ENUM,
+                build_in_type.DEFINED_STRUCT,
+                build_in_type.DEFINED_UNION,
+                build_in_type.BUILD_IN_ARRAY
             ]
             else False
         )
