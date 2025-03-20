@@ -50,7 +50,7 @@ class identifier:
             if isinstance(v_, dict):
                 for kk_, vv_ in v_.items():
                     new_start = vv_.initialize_list(token_list, new_start)
-            elif v_.using_type.type_ == build_in_type.BUILD_IN_ARRAY:
+            elif v_.type_.using_type == build_in_type.BUILD_IN_ARRAY:
                 new_start = v_.initialize_list(token_list, new_start)
             else:
 
@@ -524,7 +524,7 @@ class Lexer:
             user_define_, struct_name, argument_dict
         )
         self.read_another_typedef(i_, token_list, ret_type)
-        return ret_type
+        #return ret_type
 
     def is_type_decleration(self, token_list: list[str]) -> bool:
         i_ = 0
@@ -540,6 +540,8 @@ class Lexer:
                 return False
             if token_list[i_] in self.all_typedef.keys():
                 return False
+            if token_list[i_] == "typedef":
+                return True
         return False
 
     def is_function_decleration(self, token_list: list[str]):
@@ -553,8 +555,8 @@ class Lexer:
             identifier_idx = self.GetIdenfitiferIndex(lst)
             print(lst)
             if self.is_type_decleration(lst):
-                temp_type = self.ReadUserDefinedType(lst)
-                self.all_type[temp_type.name] = temp_type
+                self.ReadUserDefinedType(lst)
+                #self.all_type[temp_type.name] = temp_type
 
             elif self.is_function_decleration(lst):
                 pass

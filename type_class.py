@@ -48,7 +48,7 @@ class CompositeType(C_type):
     def __init__(
         self,
         type_: C_type,
-        #$name_: str,
+        name_: str,
         field_: dict[str, C_type],
         # typedef_name: str = "",
         is_const_=False,
@@ -58,7 +58,7 @@ class CompositeType(C_type):
         assert type_ is not None
         super().__init__(type_, is_const_, is_volatile_, aka)
         self.field_: dict[str, C_type] = field_
-        #self.name = name_
+        self.name = name_
 
     def __str__(self) -> str:
         str_type = str(self.using_type)
@@ -97,14 +97,16 @@ class C_build_in_array(CompositeType):
 
     def __init__(
         self,
-        field_: dict[str, C_type],
+        field_: dict[str, member_field],
         #size_: int,
         is_const: bool = False,
         is_volatile=False,
         aka: str = "",
     ):
-        super().__init__(build_in_type.BUILD_IN_ARRAY, field_, is_const, is_volatile, aka)
+        super().__init__(build_in_type.BUILD_IN_ARRAY, "", field_, is_const, is_volatile, aka)
         self.size = len(field_.keys())
+        self.__element_type = field_[0].type_
+        self.size = len(self.field_.keys())
 
     def Size(self) -> int:
         return self.size
@@ -134,39 +136,42 @@ class C_build_in_array(CompositeType):
 class C_struct(CompositeType):
     def __init__(
         self,
+        name_ : str,
         field_: dict[str, C_type],
         is_const_=False,
         is_volatile_=False,
         aka: str = "",
     ):
         super().__init__(
-            build_in_type.DEFINED_STRUCT, field_, is_const_, is_volatile_, aka
+            build_in_type.DEFINED_STRUCT,name_, field_, is_const_, is_volatile_, aka
         )
 
 
 class C_union(CompositeType):
     def __init__(
         self,
+        name_ : str,
         field_: dict[str, C_type],
         is_const_=False,
         is_volatile_=False,
         aka: str = "",
     ):
         super().__init__(
-            build_in_type.DEFINED_UNION, field_, is_const_, is_volatile_, aka
+            build_in_type.DEFINED_UNION, name_, field_, is_const_, is_volatile_, aka
         )
 
 
 class C_enum(CompositeType):
     def __init__(
         self,
+        name_ : str,
         field_: dict[str, C_type],
         is_const_=False,
         is_volatile_=False,
         aka: str = "",
     ):
         super().__init__(
-            build_in_type.DEFINED_UNION, field_, is_const_, is_volatile_, aka
+            build_in_type.DEFINED_UNION, name_, field_, is_const_, is_volatile_, aka
         )
 
 
