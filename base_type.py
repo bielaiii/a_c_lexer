@@ -76,6 +76,7 @@ class C_type:
         self.is_const = is_const_
         self.is_volatile = is_volatile_
         self.aka = aka
+        self.subtype = None
         # self.subtype = None
 
     def __str__(self) -> str:

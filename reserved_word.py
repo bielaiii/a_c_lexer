@@ -75,6 +75,7 @@ fundamental_type: list[str] = [
     "struct",
     "union",
     "unsigned",
+    "void",
 ]
 
 frament_type_key: list[str] = [
@@ -89,4 +90,5 @@ frament_type_key: list[str] = [
     "struct",
     "union",
     "short",
+    "void",
 ]

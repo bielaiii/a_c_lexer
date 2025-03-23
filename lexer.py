@@ -1,8 +1,12 @@
+from operator import truediv
 import random
 import re
 import string
 import token
+from tracemalloc import start
 from typing import Generator
+from webbrowser import get
+import base_type
 import reserved_word
 from base_type import *
 from type_class import *
@@ -128,17 +132,61 @@ class Statement:
         pass
 
 
-class FunctionBody:
+init_list_type = list
+key_dict_type = dict[str, any]
+
+
+class Initialization:
     def __init__(self):
         pass
+
+    def reader(
+        self, token_list: list[str], start_idx: int
+    ) -> tuple[init_list_type, key_dict_type]:
+        len_ = len(token_list)
+        val_list: list = []
+        ket_dict: key_dict_type = {}
+        while start_idx < len_:
+            # if token_list[start_idx] == "{":
+            # val_list.append
+            if token_list[start_idx] == ".":
+                start_idx += 1
+                key = token_list[start_idx]
+                start_idx += 1
+                if token_list[start_idx] == "{":
+                    ket_dict[key] = self.reader(token_list, start_idx)
+                else:
+                    ket_dict[key] = token_list[start_idx]
+            else:
+                if token_list[start_idx] == "{":
+                    val_list.append(self.reader(token_list, start_idx))
+                else:
+                    val_list.append(token_list[start_idx])
+                # val_list.append(token_list[start_idx])
+
+            while start_idx < len_ and token_list[start_idx] != ",":
+                start_idx += 1
+            start_idx += 1
+
+        return val_list, ket_dict
+
+
+class FunctionBody:
+    def __init__(self, name_ : str, return_type : C_type, argument_ : dict[str, identifier]):
+        #pass
         self.body = []
+        self.return_type : C_type = return_type
+        self.argument_ = argument_
+        self.name_ =    name_ 
+    def __str__(self):
+        return f"Function\n{self.return_type} {self.name_}({self.argument_})"
 
 
 class Lexer:
     all_type: dict[str, C_type] = {}
     all_identifier: dict[str, identifier] = {}
     all_typedef: dict[str, C_type] = {}
-
+    all_function : dict[str,FunctionBody ] = {}
     def __init__(self):
         pass
 
@@ -269,6 +317,22 @@ class Lexer:
             ]:
                 return idx_
             idx_ += 1
+    
+    def is_fundamental_type(self, may_be_type : str)-> bool:
+        return True if may_be_type in reserved_word.fundamental_type else False
+        """         #may_be_type = token_list[i_]
+        if may_be_type.startswith(("struct", "union", "enum", "unsigend", "long")):
+            pass
+        else:
+            may_be_type = may_be_type.split(" ")[-1]
+        if may_be_type in reserved_word.fundamental_type:
+            return True
+        elif CTypeFactory.part_of_name.append(may_be_type):
+            assert may_be_type.startswith("struct", "union", "enum")
+            return True
+        return False """
+        
+        
 
     def ReadDeclerationList(self, token_list: list[str], left: int, right: int):
         len_ = len(token_list)
@@ -304,8 +368,12 @@ class Lexer:
                     return C_build_in_pointer(
                         self.ReadDeclerationList(token_list, left - 1, right)
                     )
-                elif token_list[left] in reserved_word:
+                elif self.is_fundamental_type(" ".join(token_list[:left + 1])):
                     return C_type(token_list[left], "")
+                elif self.all_typedef.keys():
+                    return self.all_typedef[token_list[left]]
+                elif left > 0 and f"{token_list[left - 1]} {token_list[left]}" in self.all_type.keys():
+                    return self.all_type[f"{token_list[left - 1]} {token_list[left]}"]
 
     def ReadRecleration2(self, token_list: list[str], left: int, right: int):
         len_ = len(token_list)
@@ -338,11 +406,11 @@ class Lexer:
                     while right < len_ and token_list[right] != "]":
                         array_size_ += token_list[right]
                         right += 1
-                    
-                    #element_type =self.ReadRecleration2(token_list, left, right + 1)self.ReadRecleration2(token_list, left, right + 1) 
-                    
+
+                    # element_type =self.ReadRecleration2(token_list, left, right + 1)self.ReadRecleration2(token_list, left, right + 1)
+
                     return CTypeFactory.get_array(
-                       self.ReadRecleration2(token_list, left, right + 1), array_size_
+                        self.ReadRecleration2(token_list, left, right + 1), array_size_
                     )
 
                 elif token_list[right] == ")":
@@ -386,9 +454,7 @@ class Lexer:
             )
             return member_field(token_lst[identifier_idx], temp_type)
 
-    def read_another_typedef(
-        self, i_: int, token_list: list[str], target_type: C_type
-    ):
+    def read_another_typedef(self, i_: int, token_list: list[str], target_type: C_type):
         typedef_name = []
         i_ += 1
         len_ = len(token_list)
@@ -455,11 +521,13 @@ class Lexer:
                     i_ += 1
             elif codes[i_] == "/":
                 if codes[i_ + 1] == "/":
+                    i_ += 1
                     while i_ < len_ and codes[i_] != "\n":
                         i_ += 1
                     i_ += 1
                 elif codes[i_ + 1] == "*":
-                    while i_ < len_ and codes[i_] != "*" and codes[i_ + 1] != "/":
+                    i_ += 2
+                    while i_ + 1 < len_ and codes[i_] != "*" and codes[i_ + 1] != "/":
                         i_ += 1
                     i_ += 2
                 continue
@@ -475,10 +543,10 @@ class Lexer:
             ):
                 ret_lst.append(codes[i_])
 
-            if codes[i_] == ";" and len(bracket_lst) == 0:
-                a = 0
+            if i_ < len_ and codes[i_] == ";" and len(bracket_lst) == 0:
                 yield ret_lst
                 ret_lst = []
+            
             # elif len(bracket_lst) == 0 and len(ret_lst):
             #    yield ret_lst
             #    ret_lst = []
@@ -524,7 +592,7 @@ class Lexer:
             user_define_, struct_name, argument_dict
         )
         self.read_another_typedef(i_, token_list, ret_type)
-        #return ret_type
+        # return ret_type
 
     def is_type_decleration(self, token_list: list[str]) -> bool:
         i_ = 0
@@ -543,11 +611,78 @@ class Lexer:
             if token_list[i_] == "typedef":
                 return True
         return False
+    
+    def is_type(self, code : str):
+        if code in reserved_word.frament_type_key:
+            return True 
+        if code in reserved_word.fundamental_type:
+            return True
+        
+        if code in self.all_typedef.keys():
+            return True
+        
+        user_define_ = ["struct", "enum", "union"]
+        for u in user_define_:
+            new_code = f"{u} {code}"
+            if new_code in self.all_type.keys():
+                return True
+        return False
+    
+    def GetReturnType(self,token_list : list[str], idx : int ) -> C_type:
+        #i_ = idx
+        return_type = ""
+        type_lst = token_list[:idx]
+        #while idx > 0 and
+        return_type = self.ReadRecleration2(type_lst, 0, 0)
+        return return_type
 
-    def is_function_decleration(self, token_list: list[str]):
+    def ReadFunction(self, token_list : list[str], idx : int):
+        i_ = idx
+        len_ = len(token_list)
+        while i_ < len_ and token_list[i_] != "(":
+            i_ += 1
+        #i_ -= 1
+        i_ += 1
+        argument_dict: dict[str, C_type] = {}
+        while token_list[i_] != ")":
+            temp_list = []
+            while token_list[i_] not in [",", ")"]:
+                temp_list.append(token_list[i_])
+                i_ += 1
+            if token_list[i_] != ")":
+                i_ += 1
+            identifier_idx = self.GetIdenfitiferIndex(temp_list)
+            temp_type = self.ReadDeclerationList(temp_list, identifier_idx - 1, identifier_idx + 1)
+            id_ = identifier(temp_type, temp_list[identifier_idx])
+            argument_dict[id_.annotated_name] = id_
+        return_type = self.GetReturnType(token_list, idx)
+        i_ += 1
 
-        pass
+        bracket_lst = ["{"]
+        i_ += 1
+        codes_ = []
+        while i_ < len_ and len(bracket_lst) != 0:
+            if token_list[i_] in ( "{", "(", "["):
+                bracket_lst.append(token_list[i_])
+            elif token_list[i_] == "}" and bracket_lst[-1] == "{": 
+                bracket_lst.pop()
+            elif token_list[i_] == "]" and bracket_lst[-1] == "[": 
+                bracket_lst.pop()
+            elif token_list[i_] == "(" and bracket_lst[-1] == ")": 
+                bracket_lst.pop()
+            codes_.append(token_list[i_])
+            i_ += 1
+        i_ +=- 1 
+        functor_ = FunctionBody(token_list[idx], return_type, argument_dict)
+        self.all_function[functor_.name_] = functor_
 
+        #self.all_function 
+        return temp_type
+
+    def is_function_decleration(self, token_list: list[str], identifier_idx : int):
+        if token_list[identifier_idx + 1] == "(" and self.is_type(token_list[identifier_idx - 1]):
+            return True
+        return False
     def TokenDispatch(self, codes: str):
 
         sentence_gen = self.OmitToken(codes)
@@ -556,29 +691,54 @@ class Lexer:
             print(lst)
             if self.is_type_decleration(lst):
                 self.ReadUserDefinedType(lst)
-                #self.all_type[temp_type.name] = temp_type
+                # self.all_type[temp_type.name] = temp_type
 
-            elif self.is_function_decleration(lst):
+            elif self.is_function_decleration(lst, identifier_idx):
+                self.ReadFunction(lst, identifier_idx)
+                
                 pass
             else:
                 temp_type = self.ReadRecleration2(
                     lst, identifier_idx - 1, identifier_idx + 1
                 )
-                cur_identifier = identifier(temp_type, lst[identifier_idx])
+                if lst[identifier_idx + 1] == "[":
+                    #cur_identifier = self.all_identifier[lst[identifier_idx]]
+                    #cur_identifier.type_ = temp_type
+                    temp_size = 0
+                    if lst[identifier_idx + 2] == "]":
+                        temp_size = 10
+                        
+                    else:
+                        temp_size = ""
+                        identifier_idx += 2
+                        while lst[identifier_idx] != "]":
+                            #temp_size = temp_size * 10 + int(lst[identifier_idx + 2])
+                            #identifier_idx += 1
+                            temp_size+= lst[identifier_idx ]
+                            identifier_idx += 1
+                        identifier_idx += 1
+                    
+                    #temp_size = lst[identifier_idx + 1]
+                    array_type = CTypeFactory.auto_call_method(build_in_type.BUILD_IN_ARRAY, temp_type, temp_size)
+
+                    cur_identifier = identifier(array_type, lst[identifier_idx])
+                else:
+                    cur_identifier = identifier(temp_type, lst[identifier_idx])
 
                 self.all_identifier[lst[identifier_idx]] = cur_identifier
 
-        val_list = [1, 2, 3, 4, 5, 6, 7, 8]
-        self.all_identifier["b"].initialize_list(val_list, 0)
-        print(self.all_identifier["b"].print_value())
+        # val_list = [1, 2, 3, 4, 5, 6, 7, 8]
+        # self.all_identifier["b"].initialize_list(val_list, 0)
+        # print(self.all_identifier["b"].print_value())
+        a = 1
 
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
             self.TokenDispatch(codes)
 
-        for k, v in self.all_typedef.items():
-            print(f"{k}, {v}")
+        #for k, v in self.all_typedef.items():
+        #    print(f"{k}, {v}")
 
 
 if __name__ == "__main__":
