@@ -21,7 +21,7 @@ class C_build_in_pointer(C_type):
         sss = ""
         temp_type = self.subtype
         while temp_type is not None:
-            sss += f"{temp_type.using_type} -> "
+            sss += f"{temp_type}"
             temp_type = temp_type.subtype
         return f"{super().__str__()} of {sss}"
         # return f"{super().__str__()} of {self.point_to_}"
@@ -145,7 +145,7 @@ class C_build_in_array(CompositeType):
         return self.value[key]
 
     def __str__(self):
-        return f"{super().__str__()} of {self.size_code} of {self.element_type}"
+        return f"{super().__str__()} of {self.size_code} of {self.subtype}"
 
     def print_element(self):
         return f""
@@ -154,7 +154,7 @@ class C_build_in_array(CompositeType):
         idx_key = [f"_{x}" for x in range(self.size)]
         ret_dict: dict[str, identifier] = {}
         for i in idx_key:
-            ret_dict[i] = identifier(self.element_type, i, nan)
+            ret_dict[i] = identifier(self.subtype, i, nan)
         return ret_dict
 
 
@@ -170,6 +170,9 @@ class C_struct(CompositeType):
         super().__init__(
             build_in_type.DEFINED_STRUCT, name_, field_, is_const_, is_volatile_, aka
         )
+    
+    def __str__(self):
+        return f"struct {self.name}"
 
 
 class C_union(CompositeType):
@@ -184,6 +187,9 @@ class C_union(CompositeType):
         super().__init__(
             build_in_type.DEFINED_UNION, name_, field_, is_const_, is_volatile_, aka
         )
+    
+    def __str__(self):
+        return f"union {self.name}"
 
 
 class C_enum(CompositeType):
@@ -198,6 +204,9 @@ class C_enum(CompositeType):
         super().__init__(
             build_in_type.DEFINED_UNION, name_, field_, is_const_, is_volatile_, aka
         )
+    
+    def __str__(self):
+        return f"enum {self.name}"
 
 
 class CTypeFactory:

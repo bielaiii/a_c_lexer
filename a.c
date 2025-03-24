@@ -20,22 +20,8 @@ typedef struct {
   float asd[3];
 } bar;
 
-typedef struct {
-    double f_;
-    long long a;
-    // float (*ptr)[3][3];
-    // double arr[3];
-    int (*ptrr)[3];
-    float asd[3];
-  } bur;
 
-  bur temp[3] = {
-    {1, 2, NULL, 4, 5, 6},
-    {1, 2, NULL, 4, 5, 6},
-    {1, 2, NULL, 4, 5, 6},
-};
-
-void func_decle(double b, float a);
+void functor(double am , int pt);
 
 void func(bar *b, int a)
 {
