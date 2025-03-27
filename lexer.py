@@ -269,7 +269,6 @@ class Lexer:
             return True
         return False
 
-    """ ignore preprocess """
 
     def StartDeleration(self, code: str) -> str:
         pass
@@ -491,7 +490,40 @@ class Lexer:
             token_list[i_] == "*"
             and token_list[i_ - 1] in reserved_word.frament_type_key
         ):
-            return True
+            return True 
+
+    def Preprocess(self, token_list: list[str], idx : int) -> list[str]:
+        if token_list[idx: idx + 3] == "#if":
+            sk = []
+            while True:
+                if token_list[idx] != "#":
+                    pass
+                elif token_list[idx : idx + 3] == "#if":
+                    sk.append("$if")
+                    idx += 3
+                elif token_list[idx : idx + 6] == "#ifdef":
+                    sk.append("$if")
+                    idx += 6
+                elif token_list[idx : idx + 7] == "#ifndef":
+                    sk.append("$if")
+                    idx += 7
+                elif token_list[idx : idx + 6] == "#ifdef":
+                    sk.append("$if")
+                    idx += 6
+                elif token_list[idx : idx + 6] == "#endif":
+                    sk.pop()
+                    idx += 6
+                    if len(sk) == 0:
+                        return idx
+                idx+= 1
+        else:
+            while token_list[idx] != "\n":
+                idx += 1
+                if token_list[idx] == "\\":
+                    idx += 2
+            return idx
+        
+        
 
     def OmitToken(self, codes: str) -> Generator[str, any, any]:
         token = ""
@@ -509,16 +541,13 @@ class Lexer:
                 i_ += 1
 
             if token != "":
-                # yield token
                 ret_lst.append(token)
                 token = ""
             if codes[i_] in ["\t", " ", "\b", "\n"]:
                 pass
             elif codes[i_] == "#":
-                while i_ < len_ and codes[i_] != "\n":
-                    if codes[i_] == "\\":
-                        i_ += 1
-                    i_ += 1
+                i_ = self.Preprocess(codes, i_)
+                a = 0
             elif codes[i_] == "/":
                 if codes[i_ + 1] == "/":
                     i_ += 1
@@ -689,7 +718,7 @@ class Lexer:
         sentence_gen = self.OmitToken(codes)
         for lst in sentence_gen:
             identifier_idx = self.GetIdenfitiferIndex(lst)
-            #print(lst)
+            print(lst)
             if self.is_type_decleration(lst):
                 self.ReadUserDefinedType(lst)
                 # self.all_type[temp_type.name] = temp_type
