@@ -1,3 +1,4 @@
+from curses.ascii import isalpha
 from operator import truediv
 import random
 import re
@@ -172,12 +173,15 @@ class Initialization:
 
 
 class FunctionBody:
-    def __init__(self, name_ : str, return_type : C_type, argument_ : dict[str, identifier]):
-        #pass
+    def __init__(
+        self, name_: str, return_type: C_type, argument_: dict[str, identifier]
+    ):
+        # pass
         self.body = []
-        self.return_type : C_type = return_type
+        self.return_type: C_type = return_type
         self.argument_ = argument_
-        self.name_ =    name_ 
+        self.name_ = name_
+
     def __str__(self):
         return f"Function\n{self.return_type} {self.name_}({",".join(f"{v_.annotated_name}: {v_.type_}" for v_ in self.argument_.values())})"
 
@@ -186,7 +190,8 @@ class Lexer:
     all_type: dict[str, C_type] = {}
     all_identifier: dict[str, identifier] = {}
     all_typedef: dict[str, C_type] = {}
-    all_function : dict[str,FunctionBody ] = {}
+    all_function: dict[str, FunctionBody] = {}
+
     def __init__(self):
         pass
 
@@ -269,11 +274,10 @@ class Lexer:
             return True
         return False
 
-
     def StartDeleration(self, code: str) -> str:
         pass
 
-    def is_identifier(self, code: str) -> False:
+    def is_new_identifier(self, code: str) -> False:
         if code in reserved_word.reserved_word:
             return False
 
@@ -299,25 +303,31 @@ class Lexer:
             )
         return random_name
 
-    def GetIdenfitiferIndex(self, token_list: list[str]):
-        idx_ = 0
-        len_ = len(token_list)
-        while idx_ < len_:
-            if (
-                token_list[idx_] not in self.all_type.keys()
-                and token_list[idx_] not in self.all_typedef.keys()
-                and self.is_identifier(token_list[idx_])
-            ):
-                return idx_
-            elif token_list[idx_ + 1] == "{" and token_list[idx_] in [
+    def GetIdenfitiferIndex(self, tokens: list[str]):
+        i_ = 0
+        len_ = len(tokens)
+        while i_ < len_:
+            if tokens[i_] in reserved_word.frament_type_key:
+                pass
+            elif tokens[i_] in reserved_word.fundamental_type:
+                pass
+            elif tokens[i_] in self.all_type.keys():
+                pass
+            elif tokens[i_] in self.all_typedef.keys():
+                pass
+            elif self.is_new_identifier(tokens[i_]):
+                #and not self.is_identifier(tokens[i_])
+                return i_
+            elif tokens[i_] == "{" and tokens[i_ - 1] in [
                 "struct",
                 "union",
                 "enum",
             ]:
-                return idx_
-            idx_ += 1
-    
-    def is_fundamental_type(self, may_be_type : str)-> bool:
+                return i_
+            i_ += 1
+        return i_
+
+    def is_fundamental_type(self, may_be_type: str) -> bool:
         return True if may_be_type in reserved_word.fundamental_type else False
         """         #may_be_type = token_list[i_]
         if may_be_type.startswith(("struct", "union", "enum", "unsigend", "long")):
@@ -330,200 +340,199 @@ class Lexer:
             assert may_be_type.startswith("struct", "union", "enum")
             return True
         return False """
-        
-        
 
-    def ReadDeclerationList(self, token_list: list[str], left: int, right: int):
-        len_ = len(token_list)
+    def ReadDeclerationList(self, tokens: list[str], left: int, right: int):
+        len_ = len(tokens)
         while right < len_ or left >= 0:
             while right < len_:
-                if token_list[right] == "(":
+                if tokens[right] == "(":
                     assert (
-                        token_list[left] in reserved_word
-                        or token_list[left] in self.all_type.keys()
-                        or token_list[left] == "*"
-                    ), f"{token_list[left]} is unexpected"
-                    if token_list[left] == "*":
+                        tokens[left] in reserved_word
+                        or tokens[left] in self.all_type.keys()
+                        or tokens[left] == "*"
+                    ), f"{tokens[left]} is unexpected"
+                    if tokens[left] == "*":
                         # function pointer
                         pass
                     else:
                         pass
-                elif token_list[right] == "[":
+                elif tokens[right] == "[":
                     array_size_ = ""
-                    while right < len_ and token_list[right] != "]":
-                        array_size_ += token_list[right]
+                    while right < len_ and tokens[right] != "]":
+                        array_size_ += tokens[right]
                         right += 1
                     return C_build_in_array(
-                        array_size_, self.ReadDeclerationList(token_list, left, right)
+                        array_size_, self.ReadDeclerationList(tokens, left, right)
                     )
-                elif token_list[right] == ")":
-                    temp_type = self.ReadDeclerationList(token_list, left, len_ + 1)
+                elif tokens[right] == ")":
+                    temp_type = self.ReadDeclerationList(tokens, left, len_ + 1)
 
                     pass
                 right += 1
             if left >= 0:
 
-                if token_list[left] == "*":
+                if tokens[left] == "*":
                     return C_build_in_pointer(
-                        self.ReadDeclerationList(token_list, left - 1, right)
+                        self.ReadDeclerationList(tokens, left - 1, right)
                     )
-                elif self.is_fundamental_type(" ".join(token_list[:left + 1])):
-                    return C_type(token_list[left], "")
+                elif self.is_fundamental_type(" ".join(tokens[: left + 1])):
+                    return C_type(tokens[left], "")
                 elif self.all_typedef.keys():
-                    return self.all_typedef[token_list[left]]
-                elif left > 0 and f"{token_list[left - 1]} {token_list[left]}" in self.all_type.keys():
-                    return self.all_type[f"{token_list[left - 1]} {token_list[left]}"]
+                    return self.all_typedef[tokens[left]]
+                elif (
+                    left > 0
+                    and f"{tokens[left - 1]} {tokens[left]}"
+                    in self.all_type.keys()
+                ):
+                    return self.all_type[f"{tokens[left - 1]} {tokens[left]}"]
 
-    def ReadRecleration2(self, token_list: list[str], left: int, right: int):
-        len_ = len(token_list)
+    def ReadRecleration2(self, tokens: list[str], left: int, right: int):
+        len_ = len(tokens)
 
         i_ = 0
         while right < len_ or left >= 0:
             if (
                 right < len_
                 and left >= 0
-                and token_list[right] == ")"
-                and token_list[left] == "("
+                and tokens[right] == ")"
+                and tokens[left] == "("
             ):
                 right += 1
                 left -= 1
-            if right < len_ and token_list[right] != ")":
-                if token_list[right] == "(":
+            if right < len_ and tokens[right] != ")":
+                if tokens[right] == "(":
                     assert (
-                        token_list[left] in reserved_word
-                        or token_list[left] in self.all_type.keys()
-                        or token_list[left] == "*"
-                    ), f"{token_list[left]} is unexpected"
-                    if token_list[left] == "*":
+                        tokens[left] in reserved_word
+                        or tokens[left] in self.all_type.keys()
+                        or tokens[left] == "*"
+                    ), f"{tokens[left]} is unexpected"
+                    if tokens[left] == "*":
                         # function pointer
                         pass
                     else:
                         pass
-                elif token_list[right] == "[":
+                elif tokens[right] == "[":
                     array_size_ = ""
                     right += 1
-                    while right < len_ and token_list[right] != "]":
-                        array_size_ += token_list[right]
+                    while right < len_ and tokens[right] != "]":
+                        array_size_ += tokens[right]
                         right += 1
 
                     # element_type =self.ReadRecleration2(token_list, left, right + 1)self.ReadRecleration2(token_list, left, right + 1)
 
                     return CTypeFactory.get_array(
-                        self.ReadRecleration2(token_list, left, right + 1), array_size_
+                        self.ReadRecleration2(tokens, left, right + 1), array_size_
                     )
 
-                elif token_list[right] == ")":
-                    temp_type = self.ReadRecleration2(token_list, left, right)
+                elif tokens[right] == ")":
+                    temp_type = self.ReadRecleration2(tokens, left, right)
                     pass
-                elif token_list[right] == ";":
-                    return self.ReadRecleration2(token_list, left, len_)
+                elif tokens[right] == ";":
+                    return self.ReadRecleration2(tokens, left, len_)
 
             if left >= 0:
 
-                if token_list[left] == "*":
+                if tokens[left] == "*":
                     return CTypeFactory.get_pointer(
-                        self.ReadRecleration2(token_list, left - 1, right)
+                        self.ReadRecleration2(tokens, left - 1, right)
                     )
-                elif token_list[left] in reserved_word.frament_type_key:
+                elif tokens[left] in reserved_word.frament_type_key:
                     if (
                         left - 1 >= 0
-                        and token_list[left - 1] in reserved_word.frament_type_key
+                        and tokens[left - 1] in reserved_word.frament_type_key
                     ):
-                        return C_type(f"{token_list[left - 1]} {token_list[left]}")
-                    return C_type(token_list[left])
+                        return C_type(f"{tokens[left - 1]} {tokens[left]}")
+                    return C_type(tokens[left])
                 elif (
-                    token_list[left] in self.all_type.keys()
-                    or token_list[left] in self.all_typedef.keys()
+                    tokens[left] in self.all_type.keys()
+                    or tokens[left] in self.all_typedef.keys()
                 ):
                     a = 0
                     temp_type = None
-                    if token_list[left] in self.all_type.keys():
-                        temp_type = self.all_type[token_list[left]]
+                    if tokens[left] in self.all_type.keys():
+                        temp_type = self.all_type[tokens[left]]
                     else:
-                        temp_type = self.all_typedef[token_list[left]]
+                        temp_type = self.all_typedef[tokens[left]]
                     return temp_type
 
-    def ReadIdDecleration(self, token_lst: list[str]):
-        identifier_idx = self.GetIdenfitiferIndex(token_lst)
-        if token_lst[identifier_idx] in ["union", "struct", "enum"]:
-            self.ReadUserDefinedType(token_lst)
+    def ReadIdDecleration(self, tokens: list[str]):
+        identifier_idx = self.GetIdenfitiferIndex(tokens)
+        if tokens[identifier_idx] in ["union", "struct", "enum"]:
+            self.ReadUserDefinedType(tokens)
         else:
             temp_type = self.ReadRecleration2(
-                token_lst, identifier_idx - 1, identifier_idx + 1
+                tokens, identifier_idx - 1, identifier_idx + 1
             )
-            return member_field(token_lst[identifier_idx], temp_type)
+            return member_field(tokens[identifier_idx], temp_type)
 
-    def read_another_typedef(self, i_: int, token_list: list[str], target_type: C_type):
+    def read_another_typedef(self, i_: int, tokens: list[str], target_type: C_type):
         typedef_name = []
         i_ += 1
-        len_ = len(token_list)
-        while i_ < len_ and token_list[i_] != ";":
-            if token_list[i_] == "*":
+        len_ = len(tokens)
+        while i_ < len_ and tokens[i_] != ";":
+            if tokens[i_] == "*":
                 i_ += 1
-                self.all_typedef[token_list[i_]] = CTypeFactory.get_pointer(
+                self.all_typedef[tokens[i_]] = CTypeFactory.get_pointer(
                     CTypeFactory(target_type)
                 )
             else:
-                typedef_name.append(token_list[i_])
-                self.all_typedef[token_list[i_]] = target_type
+                typedef_name.append(tokens[i_])
+                self.all_typedef[tokens[i_]] = target_type
             i_ += 1
 
-    def early_return(self, token_list: list[str]) -> bool:
+    def early_return(self, tokens: list[str]) -> bool:
         i_ = 0
-        len_ = len(token_list)
-        while i_ < len_ and token_list[i_] != "(":
+        len_ = len(tokens)
+        while i_ < len_ and tokens[i_] != "(":
             i_ += 1
         if i_ >= len_:
             return False
         i_ -= 1
-        if not self.is_identifier(token_list[i_]):
+        if not self.is_new_identifier(tokens[i_]):
             return False
 
         i_ -= 1
 
         if not (
-            token_list[i_] in reserved_word.frament_type_key or token_list[i_] == "*"
+            tokens[i_] in reserved_word.frament_type_key or tokens[i_] == "*"
         ):
             return False
 
         if (
-            token_list[i_] == "*"
-            and token_list[i_ - 1] in reserved_word.frament_type_key
+            tokens[i_] == "*"
+            and tokens[i_ - 1] in reserved_word.frament_type_key
         ):
-            return True 
+            return True
 
-    def Preprocess(self, token_list: list[str], idx : int) -> list[str]:
-        if token_list[idx: idx + 3] == "#if":
-            sk = []
-            while True:
-                if token_list[idx] != "#":
-                    pass
-                elif token_list[idx : idx + 3] == "#if":
-                    sk.append("$if")
-                    idx += 3
-                elif token_list[idx : idx + 6] == "#ifdef":
-                    sk.append("$if")
-                    idx += 6
-                elif token_list[idx : idx + 7] == "#ifndef":
-                    sk.append("$if")
-                    idx += 7
-                elif token_list[idx : idx + 6] == "#ifdef":
-                    sk.append("$if")
-                    idx += 6
-                elif token_list[idx : idx + 6] == "#endif":
-                    sk.pop()
-                    idx += 6
-                    if len(sk) == 0:
-                        return idx
-                idx+= 1
-        else:
-            while token_list[idx] != "\n":
-                idx += 1
-                if token_list[idx] == "\\":
-                    idx += 2
-            return idx
-        
-        
+    def consume_preprocess(self, tokens: list[str], i_: int) -> list[str]:
+        if (
+            tokens[i_ : i_ + 3] == "#if"
+            or tokens[i_ : i_ + 7] == "#define"
+            or tokens[i_ : i_ + 6] == "#endif"
+            or tokens[i_ : i_ + 8] == "#include"
+            or tokens[i_ : i_ + 5] == "#else"
+        ):
+            while tokens[i_] != "\n":
+                i_ += 1
+                if tokens[i_] == "\\":
+                    i_ += 2
+        return i_
+
+    def consume_comments(self, tokens: list[str], i_: int) -> int:
+        len_ = len(tokens)
+        if tokens[i_ + 1] == "/":
+            i_ += 1
+            while i_ < len_ and tokens[i_] != "\n":
+                i_ += 1
+            i_ += 1
+        elif tokens[i_ + 1] == "*":
+            i_ += 2
+            while i_ + 1 < len_:
+                i_ += 1
+                if tokens[i_] == "*" and tokens[i_ + 1] == "/":
+                    break
+            i_ += 2
+        return i_
 
     def OmitToken(self, codes: str) -> Generator[str, any, any]:
         token = ""
@@ -532,33 +541,18 @@ class Lexer:
         ret_lst: list[str] = []
         bracket_lst: list[str] = []
         while i_ < len_:
-            while (
-                i_ < len_
-                and codes[i_]
-                in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
-            ):
+            while codes[i_] == "_" or codes[i_].isalnum():
                 token += codes[i_]
                 i_ += 1
-
             if token != "":
                 ret_lst.append(token)
                 token = ""
             if codes[i_] in ["\t", " ", "\b", "\n"]:
                 pass
             elif codes[i_] == "#":
-                i_ = self.Preprocess(codes, i_)
-                a = 0
-            elif codes[i_] == "/":
-                if codes[i_ + 1] == "/":
-                    i_ += 1
-                    while i_ < len_ and codes[i_] != "\n":
-                        i_ += 1
-                    i_ += 1
-                elif codes[i_ + 1] == "*":
-                    i_ += 2
-                    while i_ + 1 < len_ and codes[i_] != "*" and codes[i_ + 1] != "/":
-                        i_ += 1
-                    i_ += 2
+                i_ = self.consume_preprocess(codes, i_)
+            elif codes[i_ : i_ + 2] in ["//", "/*"]:
+                i_ = self.consume_comments(codes, i_)
                 continue
             elif "{" == codes[i_]:
                 bracket_lst.append("{")
@@ -576,43 +570,40 @@ class Lexer:
             if i_ < len_ and codes[i_] == ";" and len(bracket_lst) == 0:
                 yield ret_lst
                 ret_lst = []
-            
-            # elif len(bracket_lst) == 0 and len(ret_lst):
-            #    yield ret_lst
-            #    ret_lst = []
+
             i_ += 1
         if len(ret_lst) != 0:
             yield ret_lst
 
-    def ReadUserDefinedType(self, token_list: str):
+    def ReadUserDefinedType(self, tokens: str):
         argument_dict: dict[str, identifier] = {}
         i_ = 0
-        len_ = len(token_list)
+        len_ = len(tokens)
         struct_name = ""
         user_define_ = ""
-        while i_ < len_ and token_list[i_] != "{":
-            if token_list[i_] == "struct" and token_list[i_ + 1] == "{":
+        while i_ < len_ and tokens[i_] != "{":
+            if tokens[i_] == "struct" and tokens[i_ + 1] == "{":
                 struct_name = self.GenerateRandomName()
-            elif self.is_identifier(token_list[i_]) and token_list[i_ - 1] in [
+            elif self.is_new_identifier(tokens[i_]) and tokens[i_ - 1] in [
                 "union",
                 "enum",
                 "struct",
             ]:
-                struct_name = token_list[i_]
+                struct_name = tokens[i_]
 
-            if token_list[i_] == "struct":
+            if tokens[i_] == "struct":
                 user_define_ = build_in_type.DEFINED_STRUCT
-            elif token_list[i_] == "union":
+            elif tokens[i_] == "union":
                 user_define_ = build_in_type.DEFINED_UNION
-            elif token_list[i_] == "enum":
+            elif tokens[i_] == "enum":
                 user_define_ = build_in_type.DEFINED_ENUM
             i_ += 1
         i_ += 1
-        while i_ < len_ and token_list[i_] != "}":
+        while i_ < len_ and tokens[i_] != "}":
             r = i_
-            while r < len_ and token_list[r] != ";":
+            while r < len_ and tokens[r] != ";":
                 r += 1
-            temp_list = token_list[i_ : r + 1]
+            temp_list = tokens[i_ : r + 1]
             i_ = r + 1
             id_ = self.ReadIdDecleration(temp_list)
             argument_dict[id_.name_] = id_
@@ -621,7 +612,7 @@ class Lexer:
         ret_type = CTypeFactory.auto_call_method(
             user_define_, struct_name, argument_dict
         )
-        self.read_another_typedef(i_, token_list, ret_type)
+        self.read_another_typedef(i_, tokens, ret_type)
         # return ret_type
 
     def is_type_decleration(self, token_list: list[str]) -> bool:
@@ -632,7 +623,7 @@ class Lexer:
                 i_ += 1
                 if token_list[i_] == "{":
                     return True
-                elif self.is_identifier(token_list[i_]):
+                elif self.is_new_identifier(token_list[i_]):
                     if f"struct_{token_list[i_]}" not in self.all_type.keys():
                         return True
                 return False
@@ -641,78 +632,83 @@ class Lexer:
             if token_list[i_] == "typedef":
                 return True
         return False
-    
-    def is_type(self, code : str):
+
+    def is_type(self, code: str):
         if code in reserved_word.frament_type_key:
-            return True 
+            return True
         if code in reserved_word.fundamental_type:
             return True
-        
+
         if code in self.all_typedef.keys():
             return True
-        
+
         user_define_ = ["struct", "enum", "union"]
         for u in user_define_:
             new_code = f"{u} {code}"
             if new_code in self.all_type.keys():
                 return True
         return False
-    
-    def GetReturnType(self,token_list : list[str], idx : int ) -> C_type:
-        #i_ = idx
+
+    def GetReturnType(self, tokens: list[str], idx: int) -> C_type:
+        # i_ = idx
         return_type = ""
-        type_lst = token_list[:idx]
-        #while idx > 0 and
+        type_lst = tokens[:idx]
+        # while idx > 0 and
         return_type = self.ReadRecleration2(type_lst, 0, 0)
         return return_type
 
-    def ReadFunction(self, token_list : list[str], idx : int):
+    def ReadFunction(self, tokens: list[str], idx: int):
         i_ = idx
-        len_ = len(token_list)
-        while i_ < len_ and token_list[i_] != "(":
+        len_ = len(tokens)
+        while i_ < len_ and tokens[i_] != "(":
             i_ += 1
-        #i_ -= 1
+        # i_ -= 1
         i_ += 1
         argument_dict: dict[str, C_type] = {}
-        while token_list[i_] != ")":
+        while tokens[i_] != ")":
             temp_list = []
-            while token_list[i_] not in [",", ")"]:
-                temp_list.append(token_list[i_])
+            while tokens[i_] not in [",", ")"]:
+                temp_list.append(tokens[i_])
                 i_ += 1
-            if token_list[i_] != ")":
+            if tokens[i_] != ")":
                 i_ += 1
             identifier_idx = self.GetIdenfitiferIndex(temp_list)
-            temp_type = self.ReadDeclerationList(temp_list, identifier_idx - 1, identifier_idx + 1)
+            temp_type = self.ReadDeclerationList(
+                temp_list, identifier_idx - 1, identifier_idx + 1
+            )
             id_ = identifier(temp_type, temp_list[identifier_idx])
             argument_dict[id_.annotated_name] = id_
-        return_type = self.GetReturnType(token_list, idx)
+        return_type = self.GetReturnType(tokens, idx)
         i_ += 1
 
         bracket_lst = ["{"]
         i_ += 1
         codes_ = []
         while i_ < len_ and len(bracket_lst) != 0:
-            if token_list[i_] in ( "{", "(", "["):
-                bracket_lst.append(token_list[i_])
-            elif token_list[i_] == "}" and bracket_lst[-1] == "{": 
+            if tokens[i_] in ("{", "(", "["):
+                bracket_lst.append(tokens[i_])
+            elif tokens[i_] == "}" and bracket_lst[-1] == "{":
                 bracket_lst.pop()
-            elif token_list[i_] == "]" and bracket_lst[-1] == "[": 
+            elif tokens[i_] == "]" and bracket_lst[-1] == "[":
                 bracket_lst.pop()
-            elif token_list[i_] == "(" and bracket_lst[-1] == ")": 
+            elif tokens[i_] == "(" and bracket_lst[-1] == ")":
                 bracket_lst.pop()
-            codes_.append(token_list[i_])
+            codes_.append(tokens[i_])
             i_ += 1
-        i_ +=- 1 
-        functor_ = FunctionBody(token_list[idx], return_type, argument_dict)
+        i_ += -1
+        functor_ = FunctionBody(tokens[idx], return_type, argument_dict)
         self.all_function[functor_.name_] = functor_
 
-        #self.all_function 
+        # self.all_function
         return temp_type
 
-    def is_function_decleration(self, token_list: list[str], identifier_idx : int):
-        if token_list[identifier_idx + 1] == "(" and self.is_type(token_list[identifier_idx - 1]):
+    def is_function_decleration(self, token_list: list[str], identifier_idx: int):
+        if token_list[identifier_idx + 1] == "(" and self.is_type(
+            token_list[identifier_idx - 1]
+        ):
             return True
         return False
+
     def TokenDispatch(self, codes: str):
 
         sentence_gen = self.OmitToken(codes)
@@ -725,31 +721,33 @@ class Lexer:
 
             elif self.is_function_decleration(lst, identifier_idx):
                 self.ReadFunction(lst, identifier_idx)
-                
+
                 pass
             else:
                 temp_type = self.ReadRecleration2(
                     lst, identifier_idx - 1, identifier_idx + 1
                 )
                 if lst[identifier_idx + 1] == "[":
-                    #cur_identifier = self.all_identifier[lst[identifier_idx]]
-                    #cur_identifier.type_ = temp_type
+                    # cur_identifier = self.all_identifier[lst[identifier_idx]]
+                    # cur_identifier.type_ = temp_type
                     temp_size = 0
                     if lst[identifier_idx + 2] == "]":
                         temp_size = 10
-                        
+
                     else:
                         temp_size = ""
                         identifier_idx += 2
                         while lst[identifier_idx] != "]":
-                            #temp_size = temp_size * 10 + int(lst[identifier_idx + 2])
-                            #identifier_idx += 1
-                            temp_size+= lst[identifier_idx ]
+                            # temp_size = temp_size * 10 + int(lst[identifier_idx + 2])
+                            # identifier_idx += 1
+                            temp_size += lst[identifier_idx]
                             identifier_idx += 1
                         identifier_idx += 1
-                    
-                    #temp_size = lst[identifier_idx + 1]
-                    array_type = CTypeFactory.auto_call_method(build_in_type.BUILD_IN_ARRAY, temp_type, temp_size)
+
+                    # temp_size = lst[identifier_idx + 1]
+                    array_type = CTypeFactory.auto_call_method(
+                        build_in_type.BUILD_IN_ARRAY, temp_type, temp_size
+                    )
 
                     cur_identifier = identifier(array_type, lst[identifier_idx])
                 else:
@@ -770,7 +768,7 @@ class Lexer:
             codes = fp.read()
             self.TokenDispatch(codes)
 
-        #for k, v in self.all_typedef.items():
+        # for k, v in self.all_typedef.items():
         #    print(f"{k}, {v}")
 
 
