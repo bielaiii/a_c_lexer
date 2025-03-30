@@ -1,16 +1,16 @@
-from curses.ascii import isalpha
 from operator import truediv
+import queue
 import random
 import re
+import stat
 import string
 import token
-from tracemalloc import start
-from typing import Generator
-from webbrowser import get
+from typing import Deque, Generator
 import base_type
 import reserved_word
 from base_type import *
 from type_class import *
+from collections import deque
 
 
 class identifier:
@@ -29,8 +29,12 @@ class identifier:
             self.value = self.type_.init_param_dict()
         elif self.type_.using_type == build_in_type.BUILD_IN_ARRAY:
             self.value = self.type_.init_param_dict()
+        elif self.type_.using_type == build_in_type.BUILD_IN_POINTER and (self.type_.subtype.is_composite_type() or self.type_.subtype.using_type == build_in_type.BUILD_IN_ARRAY):
+            self.value = self.type_.subtype.init_param_dict()
         else:
             self.value = None
+        
+        a = 1
 
     def __str__(self) -> str:
         temp_str = ""
@@ -87,13 +91,40 @@ class identifier:
             str_values = [x.stringnify_value for x in self.value.values()]
             return f"{{{",".join(str_values)} }}"
 
-    def __setitem__(self, key: str, value):
-        assert self.type_.is_composite_type()
-        self.value[key] = value
+    def __setitem__(self, key: str | int | Deque, value):
+        if isinstance(key, Deque)and len(key) > 0: 
+            v_ = key.popleft()#
+            if len(key) == 1:
+                self.value = value
+            else:
+                self.value[v_][key] = value
+        else:
+            assert not self.type_.is_composite_type()
+            if isinstance(key, Deque):
+                key = key.popleft()
+            self.value[key] = value
 
-    def __getitem__(self, key: str):
-        assert self.type_.is_composite_type()
-        return self.value[key]
+    def __getitem__(self, key: str | int | Deque):
+        if isinstance(key, Deque) : 
+            if len(key) == 1:
+                return self.value[key.popleft()]
+            val_ = key.popleft()
+            return self.value[val_][key]
+        else:
+            assert self.type_.is_composite_type()
+            return self.value[key]
+    
+    def is_chain_chain_identifier(self, tokens : Deque):
+        #if self.type_.
+        if self.type_.is_composite_type():
+            if (len(tokens) == 1) and tokens[0] == self.annotated_name:
+                return True
+            else:
+                #return False
+                self.is_chain_chain_identifier(tokens.popleft())
+        else:
+            return True
+        #pass
 
 
 class RedefineType:
@@ -106,6 +137,10 @@ class Expression:
     expression_keyword = ["if", "while", "for", "do"]
 
     def __init__(self, mode_: str):
+        pass
+
+    def is_assignment(self, tokens: list[str]):
+
         pass
 
 
@@ -131,6 +166,79 @@ class Expression:
 class Statement:
     def __init__(self):
         pass
+        self.idx = 0
+        self.if_statememt: dict[int, list[str]] = {}
+        self.while_statememt: dict[int, list[str]] = {}
+        self.for_statememt: dict[int, list[str]] = {}
+
+        self.not_compound_statement : list[list[str]] = []
+
+        #self.not_coumpound_stated = 
+
+        self.statement_: dict[str, dict[int, list[str]]] = {}
+
+    # todo: no {}
+    def consume_statement_impl(self, tokens: list[str], i_: int):
+        temp_dict = {}
+        if len(tokens) == 0:
+            return
+        if tokens[i_] == "if":
+            # i_ += 2
+            temp_dict = self.if_statememt
+        elif token[i_] == "for":
+            # i_ += 3
+            temp_dict = self.for_statememt
+        elif tokens[i_] == "while":
+            # i_ += 5
+            temp_dict = self.while_statememt
+        else:
+            return
+
+        i_ += 1
+        brackets = []
+        brackets.append(")")
+        i_ += 1
+        save_ = ["("]
+        while len(brackets) != 0:
+            if tokens[i_] == "{":
+                brackets.append("}")
+            elif tokens[i_] == "[":
+                brackets.append("]")
+            elif tokens[i_] == "(":
+                brackets.append(")")
+            elif tokens[i_] in ["}", ")", "]"]:
+                if brackets[-1] == tokens[i_]:
+                    brackets.pop()
+                else:
+                    raise AssertionError(f"{tokens[i_]} is unexpected")
+
+                if tokens[i_] == "{":
+                    if tokens[i_] == "{":
+                        brackets.append("}")
+                    elif tokens[i_] == "[":
+                        brackets.append("]")
+                    elif tokens[i_] == "(":
+                        brackets.append(")")
+            save_.append(tokens[i_])
+            i_ += 1
+        temp_dict[self.idx] = save_
+        return i_
+    
+    def consume_statement(self, tokens: list[str], i_: int):
+        len_ = len(tokens)
+        ret = []
+        while i_ < len_:
+            if tokens[i_] in ["if", "for", "while"]:
+                i_ = self.consume_statement_impl(tokens, i_)
+            else:
+                codes = []
+                while i_ < len_ and tokens[i_] != ";":
+                    codes.append(tokens[i_])
+                    i_ += 1
+                ret.append(codes)
+            i_ += 1
+        self.not_compound_statement = ret
+        #return ret
 
 
 init_list_type = list
@@ -174,16 +282,83 @@ class Initialization:
 
 class FunctionBody:
     def __init__(
-        self, name_: str, return_type: C_type, argument_: dict[str, identifier]
+        self,
+        name_: str,
+        return_type: C_type,
+        argument_: dict[str, identifier],
+        body: list[str],
     ):
-        # pass
-        self.body = []
+        self.body = body
         self.return_type: C_type = return_type
         self.argument_ = argument_
         self.name_ = name_
+        self.statement_: Statement = Statement()
+        self.stated_id: dict[str, identifier] = {}
+        self.statement_.consume_statement(self.body, 0)
+
+        #test_code = ['b', '->', 'f_', '.', 'a', '=', ['a', '.', 'a']
+        val1 = Deque(['a'])
+        val2 = Deque(["0x123"])
+        self.argument_["a"][val1] = 0x123
+        val1 = Deque(['f_',  'a'])
+        val2 = Deque(['a'])
+        self.argument_["b"][val1] = self.argument_["a"][val2]
+        for k_, v_ in self.argument_.items():
+            self.stated_id[k_] = v_
 
     def __str__(self):
         return f"Function\n{self.return_type} {self.name_}({",".join(f"{v_.annotated_name}: {v_.type_}" for v_ in self.argument_.values())})"
+
+    def retrieveing(self, que: Deque, id_: identifier):
+        if len(que) == 1:
+            return id_.value
+
+        k_ = que.popleft()
+        v_ = id_.value[k_]
+        assert que.popleft() in ["->", "."]
+        self.is_assignment(que, v_)
+    
+    def is_lieral(self, codes: str):
+        if (temp := re.search("\d+", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        elif (temp := re.search("0x[0-9abcedfABCEDF]+", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        elif (temp := re.search("0[01234567]+", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        elif (temp := re.search("0b[01]+", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        elif (temp := re.search("[\d+]+\.[\d+]+f?", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        elif (temp := re.search("(\".*?\"|\'.*?\')", codes)) is not None:
+            if temp.group(1) == len(codes):
+                return True
+        return False
+
+
+    def signing(self, que: Deque, val: int | str, id_: identifier) -> None:
+        if len(que) == 1:
+            id_.value = val
+            return
+        k_ = que.popleft()
+        v_ = id_.value[k_]
+        assert que.popleft() in ["->", "."]
+        self.is_assignment(que, v_)
+    
+    def is_assignment(self,tokens : list[str]):
+        if "=" not in tokens:
+            return False
+    
+    def reading_assignment(self):
+        pass
+        
+
+    def read_simple_assignment(self, tokens: list[str], i_: int):
+        len_ = len(tokens)
 
 
 class Lexer:
@@ -316,7 +491,7 @@ class Lexer:
             elif tokens[i_] in self.all_typedef.keys():
                 pass
             elif self.is_new_identifier(tokens[i_]):
-                #and not self.is_identifier(tokens[i_])
+                # and not self.is_identifier(tokens[i_])
                 return i_
             elif tokens[i_] == "{" and tokens[i_ - 1] in [
                 "struct",
@@ -381,8 +556,7 @@ class Lexer:
                     return self.all_typedef[tokens[left]]
                 elif (
                     left > 0
-                    and f"{tokens[left - 1]} {tokens[left]}"
-                    in self.all_type.keys()
+                    and f"{tokens[left - 1]} {tokens[left]}" in self.all_type.keys()
                 ):
                     return self.all_type[f"{tokens[left - 1]} {tokens[left]}"]
 
@@ -493,15 +667,10 @@ class Lexer:
 
         i_ -= 1
 
-        if not (
-            tokens[i_] in reserved_word.frament_type_key or tokens[i_] == "*"
-        ):
+        if not (tokens[i_] in reserved_word.frament_type_key or tokens[i_] == "*"):
             return False
 
-        if (
-            tokens[i_] == "*"
-            and tokens[i_ - 1] in reserved_word.frament_type_key
-        ):
+        if tokens[i_] == "*" and tokens[i_ - 1] in reserved_word.frament_type_key:
             return True
 
     def consume_preprocess(self, tokens: list[str], i_: int) -> list[str]:
@@ -561,6 +730,9 @@ class Lexer:
                 if bracket_lst[-1] == "{":
                     bracket_lst.pop()
                 ret_lst.append(codes[i_])
+            elif ">" == codes[i_] and codes[i_ - 1] == "-":
+                ret_lst.pop()
+                ret_lst.append("->")
             elif (
                 codes[i_]
                 not in "0123456789_qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
@@ -696,7 +868,7 @@ class Lexer:
             codes_.append(tokens[i_])
             i_ += 1
         i_ += -1
-        functor_ = FunctionBody(tokens[idx], return_type, argument_dict)
+        functor_ = FunctionBody(tokens[idx], return_type, argument_dict, codes_)
         self.all_function[functor_.name_] = functor_
 
         # self.all_function
@@ -753,7 +925,7 @@ class Lexer:
                 else:
                     cur_identifier = identifier(temp_type, lst[identifier_idx])
 
-                self.all_identifier[lst[identifier_idx]] = cur_identifier
+                Lexer.all_identifier[lst[identifier_idx]] = cur_identifier
 
         for k_, v_ in self.all_function.items():
             print(k_)
