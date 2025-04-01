@@ -1,3 +1,4 @@
+from curses.ascii import isalpha
 from operator import truediv
 import queue
 import random
@@ -319,22 +320,22 @@ class FunctionBody:
         self.is_assignment(que, v_)
     
     def is_lieral(self, codes: str):
-        if (temp := re.search("\d+", codes)) is not None:
+        if (temp := re.search(r"\d+", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
-        elif (temp := re.search("0x[0-9abcedfABCEDF]+", codes)) is not None:
+        elif (temp := re.search(r"0x[0-9abcedfABCEDF]+", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
-        elif (temp := re.search("0[01234567]+", codes)) is not None:
+        elif (temp := re.search(r"0[01234567]+", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
-        elif (temp := re.search("0b[01]+", codes)) is not None:
+        elif (temp := re.search(r"0b[01]+", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
-        elif (temp := re.search("[\d+]+\.[\d+]+f?", codes)) is not None:
+        elif (temp := re.search(r"[\d+]+\.[\d+]+f?", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
-        elif (temp := re.search("(\".*?\"|\'.*?\')", codes)) is not None:
+        elif (temp := re.search(r"(\".*?\"|\'.*?\')", codes)) is not None:
             if temp.group(1) == len(codes):
                 return True
         return False
@@ -674,17 +675,20 @@ class Lexer:
             return True
 
     def consume_preprocess(self, tokens: list[str], i_: int) -> list[str]:
-        if (
-            tokens[i_ : i_ + 3] == "#if"
-            or tokens[i_ : i_ + 7] == "#define"
-            or tokens[i_ : i_ + 6] == "#endif"
-            or tokens[i_ : i_ + 8] == "#include"
-            or tokens[i_ : i_ + 5] == "#else"
-        ):
-            while tokens[i_] != "\n":
-                i_ += 1
-                if tokens[i_] == "\\":
-                    i_ += 2
+        i_ += 2
+        while tokens[i_] != "\n":
+            i_ += 1
+            if tokens[i_] == "\\":
+                i_ += 2
+        return i_
+    def consume_extern_C(self, tokens: list[str], i_ : int) -> int:
+        len_ = len(tokens) - 1
+        while tokens[i_] != "{":
+            i_ += 1
+        i_ += 1
+        while tokens[len_] != "}":
+            len_ -= 1
+        tokens.pop(len_)
         return i_
 
     def consume_comments(self, tokens: list[str], i_: int) -> int:
@@ -702,6 +706,84 @@ class Lexer:
                     break
             i_ += 2
         return i_
+    
+    def is_type_keyword(self, code : str) -> bool:
+        if code in reserved_word.fundamental_type:
+            return True
+        elif code in Lexer.all_type.keys():
+            return True
+        elif code in Lexer.all_typedef.keys():
+            return True
+        elif code in Lexer.all_identifier.keys():
+            return False
+        return False
+    
+    def is_legal_identifier(self, code : str) -> bool:
+        regex = r"([a-zA-Z\_]?[\w\_]+)"
+        if (result_ := re.search(regex, code)) is not None:
+            return True if result_.group(1) == code else False
+        return False
+    
+    def is_reserved_word(self, code : str) -> bool:
+        if code.startswith("__"): # for compiler extension
+            return False
+        if code in reserved_word.fundamental_type:
+            return True
+        if code in reserved_word.frament_type_key:
+            return True
+        return False
+
+
+    def split_token(self, codes: str):
+        tokens = re.split(r"(\W)", codes)
+        tokens = [x for x in tokens if x]
+
+        len_ = len(tokens)    
+        i_ = 0
+        ret = []
+        bracket = []
+        temp = []
+        while i_ < len_:
+            if self.is_reserved_word(tokens[i_]):
+                temp.append(tokens[i_])
+            elif tokens[i_] == "/" and tokens[i_ + 1] == "*" :
+                i_ += 2
+                while tokens[i_] != "*" and tokens[i_ + 1] != "/":
+                    i_ += 1
+                i_ += 2
+            elif tokens[i_] == "/" and tokens[i_ + 1] == "/":
+                i_ += 2
+                while tokens[i_] != "\n":
+                    i_ += 1
+                    if tokens[i_] == "\\":
+                        i_ += 2
+                #i_ += 2
+            elif tokens[i_] == "#" and tokens[i_ + 1] in ["if", "endif", "ifdef", "ifndef", "define" ,"else", "include"]:
+                i_ = self.consume_preprocess(tokens, i_)
+            elif tokens[i_] == "extern":
+                i_ = self.consume_extern_C(tokens, i_)
+            elif tokens[i_] != "" and tokens[i_] in string.punctuation:
+                temp.append(tokens[i_])
+                if tokens[i_] == "{":
+                    bracket.append("}")
+                elif tokens[i_] == "(":
+                    bracket.append(")")
+                elif tokens[i_] == "[":
+                    bracket.append("]")
+                elif tokens[i_] in ["}", "]", ")"]:
+                    assert bracket[-1] == tokens[i_]
+                    bracket.pop()
+            elif self.is_type_keyword(tokens[i_]):
+                temp.append(tokens[i_])
+            elif self.is_legal_identifier(tokens[i_]):
+                temp.append(tokens[i_])  
+            
+            if len(bracket) == 0 and tokens[i_] == ";":
+                ret.append(temp)
+                temp = []
+            i_ += 1
+        return ret
+        
 
     def OmitToken(self, codes: str) -> Generator[str, any, any]:
         token = ""
@@ -713,7 +795,8 @@ class Lexer:
             while codes[i_] == "_" or codes[i_].isalnum():
                 token += codes[i_]
                 i_ += 1
-            if token != "":
+            
+            if self.is_legal_identifier(token):
                 ret_lst.append(token)
                 token = ""
             if codes[i_] in ["\t", " ", "\b", "\n"]:
@@ -938,7 +1021,9 @@ class Lexer:
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
-            self.TokenDispatch(codes)
+            ret = self.split_token(codes)
+            print(ret)
+            #self.TokenDispatch(codes)
 
         # for k, v in self.all_typedef.items():
         #    print(f"{k}, {v}")
