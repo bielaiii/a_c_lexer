@@ -20,16 +20,20 @@ float asdfsd = 0l;
 #ifdef __cplusplus
 extern "C" {
 #endif
- 
 
- 
+typedef enum {
+  A = 1,
+  B ,
+  C ,
+} enum_t;
+
 
 
 
 typedef struct {
   int a;
   unsigned char b;
-} foo;
+} foo, *fp, fp1[3];
 typedef struct {
   foo f_;
   long long a;
@@ -49,8 +53,6 @@ void func(bar *b, foo a) {
 
 }
 
-int main() {
-  bar b[3] = {{.ptrr = NULL, 1, .f_.a = 1, .f_.b = 2, .asd = {1, 2, 3}},
               {.ptrr = NULL, 2, .f_.a = 3, .f_.b = 4, .asd = {4, 5, 6}},
               {.ptrr = NULL, 3, .f_.a = 5, .f_.b = 6, .asd = {7, 8, 9}}};
   printf("%d %d %d\n", b[0].f_.a, b[1].f_.a, b[2].f_.a);

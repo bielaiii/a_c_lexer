@@ -30,7 +30,7 @@ class build_in_type(Enum):
     def is_build_in_type(self) -> bool:
         return True if self.value < 14 else False
 
-    def is_complex_type(self) -> bool:
+    def is_composite_type(self) -> bool:
         return True if self.value >= 14 else False
 
 

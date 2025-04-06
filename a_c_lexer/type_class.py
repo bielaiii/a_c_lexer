@@ -4,8 +4,8 @@ from math import nan
 from sqlite3 import paramstyle
 import uuid
 
-from lexer import identifier
-from base_type import *
+from .import identifier
+from .base_type import *
 
 
 class C_build_in_pointer(C_type):
@@ -171,8 +171,8 @@ class C_struct(CompositeType):
             build_in_type.DEFINED_STRUCT, name_, field_, is_const_, is_volatile_, aka
         )
     
-    def __str__(self):
-        return f"struct {self.name}"
+    def __str__(self)->str:
+        return f"struct {self.name}{self.aka if self.aka is not "" else ""}"
 
 
 class C_union(CompositeType):
@@ -215,12 +215,12 @@ class CTypeFactory:
     part_of_name: list[str] = []
 
     @staticmethod
-    def get_struct(name: str, fields: dict[str, C_type] = None):
+    def get_struct(name: str, fields: dict[str, C_type] = None, aka : str = ""):
         key = f"struct {name}"
         if key in CTypeFactory._cache:
             return CTypeFactory._cache[key]
         CTypeFactory.part_of_name.append(name)
-        struct_type = C_struct(name, fields or {})
+        struct_type = C_struct(name, fields or {}, aka = aka)
         CTypeFactory._cache[key] = struct_type
         return struct_type
 
