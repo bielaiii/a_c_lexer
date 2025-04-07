@@ -275,7 +275,7 @@ class identifier:
 
 class C_build_in_pointer(C_type):
     def __init__(
-        self, point_to_: C_type, is_const_=False, is_volatile_=False, aka: str = ""
+        self, point_to_: C_type = None, is_const_=False, is_volatile_=False, aka: str = ""
     ):
         super().__init__(
             build_in_type.BUILD_IN_POINTER, point_to_, is_const_, is_volatile_
@@ -975,9 +975,9 @@ class Lexer:
                 pass
             elif tokens[i_] in reserved_word.fundamental_type:
                 pass
-            elif tokens[i_] in self.all_type.keys():
+            elif tokens[i_] in Lexer.all_type.keys():
                 pass
-            elif tokens[i_] in self.all_typedef.keys():
+            elif tokens[i_] in Lexer.all_typedef.keys():
                 pass
             elif self.is_new_identifier(tokens[i_]):
                 # and not self.is_identifier(tokens[i_])
@@ -1041,8 +1041,8 @@ class Lexer:
                     )
                 elif self.is_fundamental_type(" ".join(tokens[: left + 1])):
                     return C_type(tokens[left], "")
-                elif self.all_typedef.keys():
-                    return self.all_typedef[tokens[left]]
+                elif Lexer.all_typedef.keys():
+                    return Lexer.all_typedef[tokens[left]]
                 elif (
                     left > 0
                     and f"{tokens[left - 1]} {tokens[left]}" in self.all_type.keys()
@@ -1107,15 +1107,15 @@ class Lexer:
                         return C_type(f"{tokens[left - 1]} {tokens[left]}")
                     return C_type(tokens[left])
                 elif (
-                    tokens[left] in self.all_type.keys()
-                    or tokens[left] in self.all_typedef.keys()
+                    tokens[left] in Lexer.all_type.keys()
+                    or tokens[left] in Lexer.all_typedef.keys()
                 ):
                     a = 0
                     temp_type = None
-                    if tokens[left] in self.all_type.keys():
-                        temp_type = self.all_type[tokens[left]]
+                    if tokens[left] in Lexer.all_type.keys():
+                        temp_type = Lexer.all_type[tokens[left]]
                     else:
-                        temp_type = self.all_typedef[tokens[left]]
+                        temp_type = Lexer.all_typedef[tokens[left]]
                     return temp_type
 
     def ReadIdDecleration(self, tokens: list[str]):
@@ -1135,12 +1135,12 @@ class Lexer:
         while i_ < len_ and tokens[i_] != ";":
             if tokens[i_] == "*":
                 i_ += 1
-                self.all_typedef[tokens[i_]] = CTypeFactory.get_pointer(
+                Lexer.all_typedef[tokens[i_]] = CTypeFactory.get_pointer(
                     CTypeFactory(target_type)
                 )
             else:
                 typedef_name.append(tokens[i_])
-                self.all_typedef[tokens[i_]] = target_type
+                Lexer.all_typedef[tokens[i_]] = target_type
             i_ += 1
 
     def early_return(self, tokens: list[str]) -> bool:
@@ -1342,7 +1342,7 @@ class Lexer:
                     i_ += 1
                 i_ += 1
                 identifier_ = CTypeFactory.auto_call_method(current_type_, name_, members_)
-                self.all_typedef[identifier_.annotated_name] = identifier_
+                Lexer.all_typedef[identifier_.annotated_name] = identifier_
             elif tokens[i_] in ["struct", "union"]:
                 current_type_ = build_in_type.DEFINED_STRUCT if tokens[i_] == "struct" else build_in_type.DEFINED_UNION
                 if name_ == "":
@@ -1353,6 +1353,8 @@ class Lexer:
                 i_ += 1
                 while tokens[i_] != "}":
                     temp_  = self.LexerImpl(tokens, len_, i_)
+                    if temp_ is None:
+                        break
                     i_ = self.i_
                     members_[temp_.annotated_name] = temp_
                     while tokens[i_] == "\n":
@@ -1365,7 +1367,7 @@ class Lexer:
                     if self.is_legal_identifier(tokens[i_]):
                         temp_name = tokens[i_]
                     elif tokens[i_] == ",":
-                        self.all_typedef[temp_name] = identifier_ if temp_type is None else identifier_.using_type
+                        Lexer.all_typedef[temp_name] = identifier_ if temp_type is None else identifier_.using_type
                         temp_type = None
                     elif tokens[i_] == "*":
                         #i_ += 1
@@ -1384,7 +1386,6 @@ class Lexer:
                             else:
                                 temp_type = C_build_in_array(sz_, identifier_)
                             i_ += 1
-                        #self.all_typedef[]
                     i_ += 1
             elif tokens[i_] == ";":
                 assert identifier_ is not None
@@ -1392,11 +1393,33 @@ class Lexer:
                     identifier_.value = val_
                 id_ = identifier(CTypeFactory.auto_call_method(type_= type_), name_, nan, self.Const(), self.Volatile(), self.Static())
                 i_ += 1
+                if is_typing:
+                    Lexer.all_typedef[id_.annotated_name] = id_
+                    is_typing = False
+                    return None
                 self.i_ = i_
                 return id_
+            elif tokens[i_] == "}":
+                return None
+            elif tokens[i_] == "(":
+                pass
+            elif tokens[i_] == ")":
+                pass
+            elif tokens[i_] == "[":
+                sz_ = ""
+                i_ += 1
+                while tokens[i_] != "]":
+                    sz_ += tokens[i_]
+                    i_ += 1
+                i_ += 1
+                assert type_ is not None
+                type_ = CTypeFactory.get_array(sz_, type_)
 
+            elif tokens[i_] == "*":
+                type_ = C_build_in_pointer(type_)
+                pass
             elif self.is_type_keyword(tokens[i_]):
-                type_ = tokens[i_]
+                type_ = CTypeFactory.auto_call_method(tokens[i_])
             elif self.is_legal_identifier(tokens[i_]):
                 #assert type_ is not None
                 name_ = tokens[i_]
@@ -1556,10 +1579,10 @@ class Lexer:
                 if token_list[i_] == "{":
                     return True
                 elif self.is_new_identifier(token_list[i_]):
-                    if f"struct_{token_list[i_]}" not in self.all_type.keys():
+                    if f"struct_{token_list[i_]}" not in Lexer.all_type.keys():
                         return True
                 return False
-            if token_list[i_] in self.all_typedef.keys():
+            if token_list[i_] in Lexer.all_typedef.keys():
                 return False
             if token_list[i_] == "typedef":
                 return True
@@ -1720,7 +1743,7 @@ class Lexer:
 
             self.LexerImpl(ret, len(ret), 0)
 
-        for k, v in self.all_typedef.items():
+        for k, v in Lexer.all_typedef.items():
            print(f"{k}, {v}")
 
 
