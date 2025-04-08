@@ -141,6 +141,14 @@ class C_type:
 class identifier:
     all_identifier: dict[str, "identifier"] = {}
 
+    __slot__ = [
+        "type_",
+        "annotated_name",
+        "value",
+        "is_const",
+        "is_volatile",
+        "is_static",
+    ]
     def __init__(self, typename: C_type, varname: str, val=None ,is_const = False, is_volatile = False, is_static = False):
         self.type_: C_type = typename
         self.annotated_name = varname
@@ -159,8 +167,6 @@ class identifier:
             self.value = self.type_.subtype.init_param_dict()
         else:
             self.value = None
-        
-        a = 1
 
     def __str__(self) -> str:
         temp_str = ""
