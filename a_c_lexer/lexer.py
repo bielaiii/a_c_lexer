@@ -2,7 +2,7 @@ from ast import literal_eval
 from curses.ascii import isalpha
 from enum import Enum, auto
 from math import nan
-from operator import truediv
+from operator import le, truediv
 import queue
 import random
 import re
@@ -828,41 +828,35 @@ class Lexer:
         pass
     
     def is_literal(self, codes: str) -> identifier:
-        if (temp := re.search(r"\d+", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                val_ = int(name_)
-                return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"0x[0-9abcedfABCEDF]+", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                val_ = int(name_, base=16)
-                return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"0[01234567]+", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                val_ = int(name_, base=8)
-                return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"0b[01]+", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                val_ = int(name_, base=2)
-                return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"[\d+]+\.[\d+]+f?", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                type_ = build_in_type.DOUBLE
-                val_ = 0
-                if name_.endswith("f"):
-                    type_ = build_in_type.FLOAT
-                    val_ = float(name_[:-1])
-                else:
-                    val_ = float(val_)
-                return identifier(type_, name_, val_)
-        elif (temp := re.search(r"(\".*?\"|\'.*?\')", codes)) is not None:
-            if temp.group(1) == len(codes):
-                name_ = temp.group(1)
-                return identifier(C_build_in_pointer(build_in_type.CHAR), name_, name_)
+        if (temp := re.search(r"^\d+$", codes)) is not None:
+            name_ = temp.group(1)
+            val_ = int(name_)
+            return identifier(build_in_type.INT, name_, val_)
+        elif (temp := re.search(r"^0x[0-9abcedfABCEDF]+$", codes)) is not None:
+            name_ = temp.group(1)
+            val_ = int(name_, base=16)
+            return identifier(build_in_type.INT, name_, val_)
+        elif (temp := re.search(r"^0[01234567]+$", codes)) is not None:
+            name_ = temp.group(1)
+            val_ = int(name_, base=8)
+            return identifier(build_in_type.INT, name_, val_)
+        elif (temp := re.search(r"^0b[01]+$", codes)) is not None:
+            name_ = temp.group(1)
+            val_ = int(name_, base=2)
+            return identifier(build_in_type.INT, name_, val_)
+        elif (temp := re.search(r"^[\d+]+\.[\d+]+f?$", codes)) is not None:
+            name_ = temp.group(1)
+            type_ = build_in_type.DOUBLE
+            val_ = 0
+            if name_.endswith("f"):
+                type_ = build_in_type.FLOAT
+                val_ = float(name_[:-1])
+            else:
+                val_ = float(val_)
+            return identifier(type_, name_, val_)
+        elif (temp := re.search(r"^(\".*?\"|\'.*?\')$", codes)) is not None:
+            name_ = temp.group(1)
+            return identifier(C_build_in_pointer(build_in_type.CHAR), name_, name_)
         return None
 
     def StringToEnum(self, type_str: str) -> build_in_type:
@@ -1055,7 +1049,7 @@ class Lexer:
                 ):
                     return self.all_type[f"{tokens[left - 1]} {tokens[left]}"]
 
-    def ReadRecleration2(self, tokens: list[str], left: int, right: int):
+    def read_complicate_type(self, tokens: list[str], left: int, right: int):
         len_ = len(tokens)
 
         i_ = 0
@@ -1087,49 +1081,54 @@ class Lexer:
                         array_size_ += tokens[right]
                         right += 1
 
-                    # element_type =self.ReadRecleration2(token_list, left, right + 1)self.ReadRecleration2(token_list, left, right + 1)
-
                     return CTypeFactory.get_array(
-                        self.ReadRecleration2(tokens, left, right + 1), array_size_
+                        self.read_complicate_type(tokens, left, right + 1), array_size_
                     )
 
                 elif tokens[right] == ")":
-                    temp_type = self.ReadRecleration2(tokens, left, right)
+                    temp_type = self.read_complicate_type(tokens, left, right)
                     pass
                 elif tokens[right] == ";":
-                    return self.ReadRecleration2(tokens, left, len_)
+                    return self.read_complicate_type(tokens, left, len_)
 
             if left >= 0:
 
                 if tokens[left] == "*":
                     return CTypeFactory.get_pointer(
-                        self.ReadRecleration2(tokens, left - 1, right)
+                        self.read_complicate_type(tokens, left - 1, right)
                     )
                 elif tokens[left] in reserved_word.frament_type_key:
-                    if (
-                        left - 1 >= 0
-                        and tokens[left - 1] in reserved_word.frament_type_key
-                    ):
-                        return C_type(f"{tokens[left - 1]} {tokens[left]}")
-                    return C_type(tokens[left])
+                    base_type = ""
+                    if tokens[left] in Lexer.all_type.keys():
+                        if tokens[left] == "long":
+                            base_type += "long"
+                            if left > 0 and tokens[left - 1] == "long":
+                                base_type += " long"
+                                left-= 1
+                    if left > 0 and tokens[left  -1] in ["signed","unsigned"]:
+                        left - 1
+                        if tokens[left] == "unsigned":
+                            base_type += f" {tokens[left]}"
+                    return C_type(base_type)
                 elif (
                     tokens[left] in Lexer.all_type.keys()
                     or tokens[left] in Lexer.all_typedef.keys()
                 ):
-                    a = 0
                     temp_type = None
                     if tokens[left] in Lexer.all_type.keys():
                         temp_type = Lexer.all_type[tokens[left]]
                     else:
                         temp_type = Lexer.all_typedef[tokens[left]]
                     return temp_type
+            
+                    
 
     def ReadIdDecleration(self, tokens: list[str]):
         identifier_idx = self.GetIdenfitiferIndex(tokens)
         if tokens[identifier_idx] in ["union", "struct", "enum"]:
             self.ReadUserDefinedType(tokens)
         else:
-            temp_type = self.ReadRecleration2(
+            temp_type = self.read_complicate_type(
                 tokens, identifier_idx - 1, identifier_idx + 1
             )
             return member_field(tokens[identifier_idx], temp_type)
@@ -1305,6 +1304,8 @@ class Lexer:
         is_false = False
         is_static = False
         val_ = None
+        saves : list[str] = []
+        endl_ = "{"
         while i_ < len_:
             if tokens[i_] == "#":
                 i_ = self.consume_preprocess(tokens, i_)
@@ -1318,11 +1319,14 @@ class Lexer:
                 is_typing = True
             elif tokens[i_] == "const":
                 is_const =True
+                saves.append(tokens[i_])
                 self.Const()
             elif tokens[i_] == "volatile":
+                saves.append(tokens[i_])
                 #is_volatile = True
                 self.Volatile()
             elif tokens[i_] == "static":
+                saves.append(tokens[i_])
                 is_static = True
                 self.Static()
             elif tokens[i_] == "enum":
@@ -1615,7 +1619,7 @@ class Lexer:
         return_type = ""
         type_lst = tokens[:idx]
         # while idx > 0 and
-        return_type = self.ReadRecleration2(type_lst, 0, 0)
+        return_type = self.read_complicate_type(type_lst, 0, 0)
         return return_type
 
     def ReadFunction(self, tokens: list[str], idx: int):
@@ -1685,7 +1689,7 @@ class Lexer:
 
                 pass
             else:
-                temp_type = self.ReadRecleration2(
+                temp_type = self.read_complicate_type(
                     lst, identifier_idx - 1, identifier_idx + 1
                 )
                 if lst[identifier_idx + 1] == "[":
