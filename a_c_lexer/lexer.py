@@ -1335,7 +1335,8 @@ class Lexer:
                     name_ == f"anonymous {tokens[i_]}"
                 members_ : dict[str, identifier] = {}
                 i_ += 1
-                assert tokens[i_] == "{"
+                
+               
                 auto_value = 0
                 while tokens[i_] != "}":
                     temp_enum = identifier(build_in_type.INT, tokens[i_])
@@ -1359,7 +1360,12 @@ class Lexer:
                     name_ == f"anonymous {tokens[i_]}"
                 members_ : dict[str, identifier] = {}
                 i_ += 1
-                assert tokens[i_] == "{"
+                if self.is_legal_identifier(tokens[i_]) and self.is_legal_identifier(tokens) and tokens[i_] == ";": # struct A ; 
+                    continue
+                elif self.is_legal_identifier(tokens[i_]) and self.is_legal_identifier(tokens[i_]): # struct A a;
+                    continue
+                assert (self.is_legal_identifier(tokens[i_]) and tokens[i_] == "{") or tokens[i_] == "{"
+                #assert tokens[i_] == "{"
                 i_ += 1
                 while tokens[i_] != "}":
                     temp_  = self.LexerImpl(tokens, len_, i_)
@@ -1444,7 +1450,8 @@ class Lexer:
 
     def split_token(self, codes: str):
         tokens = re.split(r"(\W)", codes)
-        tokens = [x for x in tokens if x]
+        #tokens = [x != " " and x != "" for x in tokens if x]
+        tokens = [s for s in tokens if s != "" and s != " "]
         return tokens
         len_ = len(tokens)    
         i_ = 0
@@ -1748,8 +1755,9 @@ class Lexer:
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
-            ret = self.remove_preprocess(self.split_token(codes))
-            assert " " not in ret
+            ret = self.split_token(codes)
+            #ret = self.remove_preprocess(self.split_token(codes))
+            #assert " " not in ret
 
             self.LexerImpl(ret, len(ret), 0)
 
