@@ -13,6 +13,7 @@ import stat
 import string
 import token
 from typing import Deque, Generator, TypeAlias, final
+import uuid
 import reserved_word
 from collections import deque
 
@@ -51,8 +52,10 @@ class build_in_type(Enum):
     #    return True if self.value >= 14 else False
 
     def __format__(self, format_spec: str) -> str:
-        return self.name.lower().replace("_", " ").replace("build in ", "")
-
+        fmt_str = self.name.lower().replace("_", " ").replace("build in ", "")
+        if format_spec == "":
+            return fmt_str
+        return f"{fmt_str:>20}"
 
 def SetType(type_: str) -> build_in_type | str:
     match (type_):
@@ -116,9 +119,9 @@ class C_type:
         v : verbose
         """
         if format_spec == "s" or format_spec == "":
-            return f"{self.using_type}"
+            return f"{self.using_type:>10}"
         else:
-            return f"{self.using_type}"
+            return f"{self.using_type:>10}"
 
     def GetMember() -> list[tuple[str, "C_type"]]:
         pass
@@ -144,6 +147,18 @@ class C_type:
             if self.using_type
             in [
                 build_in_type.DEFINED_ENUM,
+                build_in_type.DEFINED_STRUCT,
+                build_in_type.DEFINED_UNION,
+                build_in_type.BUILD_IN_ARRAY
+            ]
+            else False
+        )
+    
+    def had_multiple_members(self):
+        return (
+            True
+            if self.using_type
+            in [
                 build_in_type.DEFINED_STRUCT,
                 build_in_type.DEFINED_UNION,
                 build_in_type.BUILD_IN_ARRAY
@@ -295,20 +310,70 @@ class identifier:
     def print_struct_in_json(self)->str:
         pass
 
+    def __setitem__(self, key :list[str], val):
+
+        if isinstance(key, str):
+            assert isinstance(self.value, dict)
+            self.value[key] = val
+
+        elif len(key) == 1:
+            key = key[0]
+            if isinstance(self.value , dict):
+                assert not self.value[key].type_.had_multiple_members()
+
+                self.value[key].value = val
+                
+            else:
+                self.value = val
+        elif isinstance(self.value, dict):
+            assert len(key) > 1
+            k_ = key.popleft()
+            key.popleft()
+            self.value[key] = val
+
+        else:
+            assert not self.type_.had_multiple_members()
+            self.value = val
+
+
+    def __getitem__(self, key :list[str]):
+        """         if isinstance(key, str):
+            assert isinstance(self.value, dict)
+            return self.value[key].value """
+        if len(key) == 1:
+            if isinstance(self.value, dict):
+                return self.value[key[0]].value
+            else:
+                raise AssertionError
+        elif isinstance(self.value, dict):
+            assert len(key) > 1
+            k_ = key.popleft()
+            key.popleft()
+            return self.value[k_][key]
+        else:
+            assert not self.type_.had_multiple_members()
+            return self
+
     def __format__(self, format_spec: str) -> str:
         # final_str = f"    name : {self.annotated_name}    type : {self.type_}"
-        if isinstance(self.value , dict):
+        final_str = ""
+        fmt_ = re.split("|", format_spec)
+        enable_label = "l" in fmt_
+        enable_name = "n" in fmt_
+        enable_type = "t" in fmt_
+        enable_value = "v" in fmt_
+        if isinstance(self.value, dict):
             final_str += "{\n"
-            for v_ in self.value.values():
-                final_str += f"{v_},\n"
-            final_str += "}\n"
+            final_str += "\n".join([
+                f"{'name : ' if enable_label else '':6}{v_.annotated_name if enable_name else '':^10}{'type : ' if enable_label else '': <10}{v_.type_ if enable_type else '': >20}{'val : ' if enable_label else '':>10}{v_.value if enable_value else '':>50}"
+                for v_ in self.value.values()
+            ])
+            #for v_ in self.value.values():
+            #    final_str += f"{v_:{format_spec}},\n"
+
+            final_str += "\n}\n"
         else:
             final_str = ""
-            fmt_ = re.split("|", format_spec)
-            enable_label = "l" in fmt_
-            enable_name = "n" in fmt_
-            enable_type = "t" in fmt_
-            enable_value = "v" in fmt_
             return f"{"name : " if enable_label else ""}{self.annotated_name if enable_name else ""}{self.type_ if enable_type else ""}{"val : " if enable_label else ""} {self.value if enable_value else ""}    {"val : " if enable_label else ""} {self.value if enable_value else ""}"
             if format_spec == "" or format_spec == "s":
                 final_str += f"    val : {self.value}\n"
@@ -317,11 +382,6 @@ class identifier:
             else:
                 final_str += f"    val : {self.value}\n"
         return final_str
-
-    def __repr__(self) -> str:
-        pass
-    def __str__(self) -> str:
-        pass
 
 
 class C_build_in_pointer(C_type):
@@ -686,7 +746,6 @@ class Expression:
         pass
 
 
-
 def is_legal_identifier(code : str) -> bool:
     regex = r"(^[a-zA-Z\_]+[\w\_]*?$)"
     if (result_ := re.search(regex, code)) is not None:
@@ -850,7 +909,11 @@ class Statement:
                 if len(dq_):
                     #ret_[-1].append(deepcopy(dq_))
                     cont_sign.get_item = deepcopy(dq_)
-                    ret_.append(cont_sign)
+                    cont_sign.set_item.popleft()
+                    cont_sign.set_item.popleft()
+                    cont_sign.get_item.popleft()
+                    cont_sign.get_item.popleft()
+                    ret_.append(deepcopy(cont_sign))
                     dq_.clear()
                 i_ += 1
                 no_chaining = False
@@ -913,7 +976,7 @@ class FunctionBody:
         self.stated_id: dict[str, identifier] = {}
         self.statement_.consume_statement(self.body, 0)
 
-        print(self.statement_.ret)
+        #print(self.statement_.ret)
 
         #test_code = ['b', '->', 'f_', '.', 'a', '=', ['a', '.', 'a']
         
@@ -1001,6 +1064,7 @@ class Lexer:
     all_identifier: dict[str, identifier] = {}
     all_typedef: dict[str, C_type] = {}
     all_function: dict[str, FunctionBody] = {}
+    #all_funct : dict[str,]
 
     def __init__(self):
         self.i_ = 0
@@ -1137,13 +1201,16 @@ class Lexer:
             return False
 
     def GenerateRandomName(self) -> str:
-        random_name = "".join(
+        """         random_name = "".join(
             random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
         )
         while random_name in self.all_type.keys():
             random_name = "".join(
                 random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
-            )
+            ) """
+        random_name = uuid.uuid4()
+        while random_name in CTypeFactory._cache: 
+            random_name = uuid.uuid4()
         return random_name
 
     def GetIdenfitiferIndex(self, tokens: list[str]):
@@ -1627,7 +1694,7 @@ class Lexer:
                 dq.append(tokens[i_])
                 current_type_ = build_in_type.DEFINED_STRUCT if tokens[i_] == "struct" else build_in_type.DEFINED_UNION
                 if name_ == "":
-                    name_ == f"anonymous {tokens[i_]}"
+                    name_ = f"anonymous {self.GenerateRandomName()}"
                 members_ : dict[str, identifier] = {}
                 i_ += 1
                 if self.is_legal_identifier(tokens[i_]) and self.is_legal_identifier(tokens) and tokens[i_] == ";": # struct A ; 
@@ -1646,6 +1713,7 @@ class Lexer:
                     while tokens[i_] == "\n":
                         i_ += 1
                 i_ += 1
+                
                 identifier_: C_type = CTypeFactory.auto_call_method(current_type_, name_, members_)
                 temp_name= "" 
                 temp_type : C_type = None
@@ -1681,6 +1749,7 @@ class Lexer:
                 while len(dq):
                     dq.pop()
                 a = 0
+                name_ = ""
             elif tokens[i_] == ";":
                 assert identifier_ is not None
                 if isinstance(identifier_, identifier) and val_ is not None:
@@ -1696,6 +1765,7 @@ class Lexer:
                     #Lexer.all_typedef[id_.annotated_name] = id_
                     is_typing = False
                     self.i_ = i_
+                    name_ = ""
                     return id_
             elif tokens[i_] == "}":
                 return None
@@ -1727,6 +1797,7 @@ class Lexer:
                     body_, i_ = self.read_function_body(tokens, i_)
                     
                     fb = FunctionBody(name_, CTypeFactory.auto_call_method(dq[identifier_idx - 1]), args, body_)
+                    Lexer.all_function[fb.name_] = fb
                 
                 pass
             elif tokens[i_] == ")":
@@ -1765,7 +1836,7 @@ class Lexer:
                 #dq.append(tokens[i_])
                 i_ += 1
                 assign_list, i_  = self.initialization_list(tokens, i_)
-                print(assign_list)
+                #print(assign_list)
                 while len(dq):
                     dq.pop()
                 i_ += 1
@@ -2014,7 +2085,7 @@ class Lexer:
         sentence_gen = self.OmitToken(codes)
         for lst in sentence_gen:
             identifier_idx = self.GetIdenfitiferIndex(lst)
-            print(lst)
+            #print(lst)
             if self.is_type_decleration(lst):
                 self.ReadUserDefinedType(lst)
                 # self.all_type[temp_type.name] = temp_type
@@ -2055,9 +2126,9 @@ class Lexer:
 
                 Lexer.all_identifier[lst[identifier_idx]] = cur_identifier
 
-        for k_, v_ in self.all_function.items():
-            print(k_)
-            print(str(v_))
+        #for k_, v_ in self.all_function.items():
+        #    print(k_)
+        #    print(str(v_))
       
         a = 1
     
@@ -2113,10 +2184,17 @@ class Lexer:
             #assert " " not in ret
 
             self.LexerImpl(ret, 0)
-
+        cfg_ = identifier(self.all_typedef["foocfg"], "cfg")
+        reg_ = identifier(self.all_typedef["fooreg"], "reg")
+        cfg_[["a"]]= 1
+        cfg_[["b"]]= 0
+        cfg_[["c"]]= 3
         #for k, v in Lexer.all_typedef.items():
-        print(f"{Lexer.all_typedef["foo"]}")
+        #print(f"{Lexer.all_typedef["foo"]}")
 
+        for t in Lexer.all_function["init_func"].statement_.ret:
+            reg_[t.set_item] = cfg_[t.get_item]
+        print(f"{reg_:nvtl}")
 
 if __name__ == "__main__":
     parser_ = Lexer()
