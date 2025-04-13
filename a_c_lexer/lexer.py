@@ -1,5 +1,6 @@
 from ast import literal_eval
 import collections
+from copy import deepcopy
 from curses.ascii import isalpha
 from dataclasses import field
 from enum import Enum, auto
@@ -14,8 +15,6 @@ import token
 from typing import Deque, Generator, TypeAlias, final
 import reserved_word
 from collections import deque
-
-
 
 
 class build_in_type(Enum):
@@ -189,7 +188,7 @@ class identifier:
             self.value = None
         elif self.type_.is_composite_type():
             self.value = self.type_.init_param_dict()
-            #self.value = self.type_.subtype.init_param_dict()
+            # self.value = self.type_.subtype.init_param_dict()
         else:
             self.value = None
 
@@ -203,7 +202,7 @@ class identifier:
             else:
                 return f"{self.annotated_name} : {self.type_} = {self.value}"
 
-    #def __str__(self) -> str:
+    # def __str__(self) -> str:
     #    temp_str = ""
     #    if self.type_.is_composite_type():
     #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
@@ -280,24 +279,24 @@ class identifier:
         else:
             assert self.type_.is_composite_type()
             return self.value[key]
-    
+
     def is_chain_chain_identifier(self, tokens : Deque):
-        #if self.type_.
+        # if self.type_.
         if self.type_.is_composite_type():
             if (len(tokens) == 1) and tokens[0] == self.annotated_name:
                 return True
             else:
-                #return False
+                # return False
                 self.is_chain_chain_identifier(tokens.popleft())
         else:
             return True
-        #pass
-    
+        # pass
+
     def print_struct_in_json(self)->str:
         pass
-    
+
     def __format__(self, format_spec: str) -> str:
-        #final_str = f"    name : {self.annotated_name}    type : {self.type_}"
+        # final_str = f"    name : {self.annotated_name}    type : {self.type_}"
         if isinstance(self.value , dict):
             final_str += "{\n"
             for v_ in self.value.values():
@@ -305,6 +304,12 @@ class identifier:
             final_str += "}\n"
         else:
             final_str = ""
+            fmt_ = re.split("|", format_spec)
+            enable_label = "l" in fmt_
+            enable_name = "n" in fmt_
+            enable_type = "t" in fmt_
+            enable_value = "v" in fmt_
+            return f"{"name : " if enable_label else ""}{self.annotated_name if enable_name else ""}{self.type_ if enable_type else ""}{"val : " if enable_label else ""} {self.value if enable_value else ""}    {"val : " if enable_label else ""} {self.value if enable_value else ""}"
             if format_spec == "" or format_spec == "s":
                 final_str += f"    val : {self.value}\n"
             elif format_spec == "t":
@@ -312,12 +317,11 @@ class identifier:
             else:
                 final_str += f"    val : {self.value}\n"
         return final_str
-    
+
     def __repr__(self) -> str:
         pass
     def __str__(self) -> str:
         pass
-
 
 
 class C_build_in_pointer(C_type):
@@ -432,14 +436,19 @@ class CompositeType(C_type):
     def __getitem__(self, key: int):
         # assert isinstance(key, int)
         return self.field_[key]
-    
+    """
+    n : stand for name
+    t : stand for type
+    v : stand for value
+    l : stand for label e.g. type : ${type}
+    """    
     def __format__(self, format_spec: str) -> str:
         if format_spec == "s" or format_spec == "":
             #fmt_str = "{\n"
             #for k_, v_ in self.field_.items():
             #    fmt_str += f"{k_} : {v_},\n"
             #fmt_str += "}"
-            fmt_str = f"{{\n{'    \n'.join([f'    {k} : {v:t}' for k, v in self.field_.items()])}\n}}"
+            fmt_str = f"{{\n{'    \n'.join([f'    {k:30} : {v:f"{format_spec}t"}' for k, v in self.field_.items()])}\n}}"
             return fmt_str
         
         else:
@@ -641,7 +650,6 @@ C_AnyType: TypeAlias = (
 )
 
 
-
 class RedefineType:
     def __init__(self, name: str, type_: C_type):
         self.name = name
@@ -678,17 +686,33 @@ class Expression:
         pass
 
 
+
+def is_legal_identifier(code : str) -> bool:
+    regex = r"(^[a-zA-Z\_]+[\w\_]*?$)"
+    if (result_ := re.search(regex, code)) is not None:
+        return True if result_.group(1) == code else False
+    return False
+
+class continuous_signing:
+    __slot__ = ["get_item", "set_item"]
+    def __init__(self): 
+        self.set_item = None
+        self.get_item = None
+
 class Statement:
-    def __init__(self):
+    def __init__(self, tokens : list[str]):
         pass
+        
+        self.tokens = tokens
         self.idx = 0
         self.if_statememt: dict[int, list[str]] = {}
         self.while_statememt: dict[int, list[str]] = {}
         self.for_statememt: dict[int, list[str]] = {}
 
-        self.not_compound_statement : list[list[str]] = []
+        self.not_compound_statement : list[list[str]] = self.find_chaining_signment(tokens)
 
         #self.not_coumpound_stated = 
+        self.find_chaining_signment(self.tokens)
 
         self.statement_: dict[str, dict[int, list[str]]] = {}
 
@@ -748,12 +772,90 @@ class Statement:
             else:
                 codes = []
                 while i_ < len_ and tokens[i_] != ";":
-                    codes.append(tokens[i_])
+                    if tokens[i_] == "-" and tokens[i_ + 1] == ">": 
+                        codes.append("->")
+                        i_ += 1
+                    else:
+                        codes.append(tokens[i_])
                     i_ += 1
                 ret.append(codes)
             i_ += 1
         self.not_compound_statement = ret
-        #return ret
+    
+    def consume_compound(self, i_) -> int:
+        if self.tokens[i_] in ["if", "while", "for"]:
+            while self.tokens[i_] != ")":
+                i_ += 1
+            i_ += 1
+            if self.tokens[i_] != "{":
+                bracket_ = collections.deque("{")
+                while len(bracket_):
+                    i_ += 1
+                    if self.tokens[i_] == "{":
+                        bracket_.append("}")
+                    elif self.tokens[i_] == "}":
+                        bracket_.pop()
+            else:
+                i_ = self.consume_compound(i_)
+        else:
+            while self.tokens[i_] != ";":
+                i_ += 1
+        return i_ 
+
+    def find_chaining_signment(self, tokens :list[str]):
+        i_ = 0
+        tokens = self.tokens
+
+        len_ = len(self.tokens)
+        ret_ = collections.deque()
+        dq_ = collections.deque()
+        save_ = collections.deque()
+        cont_sign = continuous_signing()
+        while i_ < len_:
+            if tokens[i_] in ["if", "for", "while"]:
+                i_= self.consume_compound(i_)
+            else:
+                no_chaining = False
+                while tokens[i_] != ";":
+                    if no_chaining:
+                        i_ += 1
+                        continue
+                    if is_legal_identifier(tokens[i_]):
+                        dq_.append(tokens[i_])
+                    elif tokens[i_] == "-" and tokens[i_ + 1] == ">":
+                        dq_.append("->")
+                        i_ += 1
+                    elif tokens[i_] == ".":
+                        dq_.append("->")
+                    elif tokens[i_] == "[":
+                        dq_.append("[")
+                        while tokens[i_] != "]":
+                            dq_.append(tokens[i_])
+                            i_ += 1
+                    elif tokens[i_] == "=":
+                        #dq_.append("=")
+                        if len(dq_):
+                            #ret_.append(deepcopy(dq_))
+                            cont_sign.set_item = deepcopy(dq_)
+                            dq_.clear()
+
+                    elif tokens[i_] in ["\n", "\t", " "]:
+                        pass
+                    else:
+                        no_chaining = True
+                        dq_.clear()
+                    if tokens[i_]== ";":
+                        break
+                    i_ += 1
+                if len(dq_):
+                    #ret_[-1].append(deepcopy(dq_))
+                    cont_sign.get_item = deepcopy(dq_)
+                    ret_.append(cont_sign)
+                    dq_.clear()
+                i_ += 1
+                no_chaining = False
+        self.ret = ret_        
+        return self
 
 
 init_list_type = list
@@ -807,9 +909,11 @@ class FunctionBody:
         self.return_type: C_type = return_type
         self.argument_ = argument_
         self.name_ = name_
-        self.statement_: Statement = Statement()
+        self.statement_: Statement = Statement(self.body)
         self.stated_id: dict[str, identifier] = {}
         self.statement_.consume_statement(self.body, 0)
+
+        print(self.statement_.ret)
 
         #test_code = ['b', '->', 'f_', '.', 'a', '=', ['a', '.', 'a']
         
@@ -818,6 +922,7 @@ class FunctionBody:
 
     def __str__(self):
         return f"Function\n{self.return_type} {self.name_}({",".join(f"{v_.annotated_name}: {v_.type_}" for v_ in self.argument_.values())})"
+    
 
     def retrieveing(self, que: Deque, id_: identifier):
         if len(que) == 1:
@@ -829,27 +934,27 @@ class FunctionBody:
         self.is_assignment(que, v_)
     
     def is_literal(self, codes: str) -> identifier:
-        if (temp := re.search(r"(\d+[uU]?[lL]{0,2})", codes)) is not None:
+        if (temp := re.search(r"^(\d+[uU]?[lL]{0,2})$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 val_ = int(name_)
                 return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"(0x[0-9abcedfABCEDF]+[uU]?[lL]{0,2})", codes)) is not None:
+        elif (temp := re.search(r"^(0x[0-9abcedfABCEDF]+[uU]?[lL]{0,2})$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 val_ = int(name_, base=16)
                 return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"(0[01234567]+[uU]?[lL]{0,2})", codes)) is not None:
+        elif (temp := re.search(r"^(0[01234567]+[uU]?[lL]{0,2})$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 val_ = int(name_, base=8)
                 return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"(0b[01]+[uU]?[lL]{0,2})", codes)) is not None:
+        elif (temp := re.search(r"^(0b[01]+[uU]?[lL]{0,2})$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 val_ = int(name_, base=2)
                 return identifier(build_in_type.INT, name_, val_)
-        elif (temp := re.search(r"[\d+]+\.[\d+]+f?", codes)) is not None:
+        elif (temp := re.search(r"^[\d+]+\.[\d+]+f?$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 type_ = build_in_type.DOUBLE
@@ -860,7 +965,7 @@ class FunctionBody:
                 else:
                     val_ = float(val_)
                 return identifier(type_, name_, val_)
-        elif (temp := re.search(r"(\".*?\"|\'.*?\')", codes)) is not None:
+        elif (temp := re.search(r"^(\".*?\"|\'.*?\')$", codes)) is not None:
             if temp.group(1) == len(codes):
                 name_ = temp.group(1)
                 return identifier(C_build_in_pointer(build_in_type.CHAR), name_, name_)
@@ -881,6 +986,9 @@ class FunctionBody:
             return False
     
     def reading_assignment(self):
+        pass
+    
+    def chaining_assignment(self):
         pass
         
 
@@ -1051,7 +1159,7 @@ class Lexer:
                 i_ -= 1
             
         
-        while i_  > 0:
+        while i_  >= 0:
             if tokens[i_] in reserved_word.frament_type_key:
                 pass
             elif tokens[i_] in reserved_word.fundamental_type:
@@ -1421,7 +1529,28 @@ class Lexer:
         i_ += 1
          
         return lst_, i_
-                        
+
+    def read_function_body(self, tokens :list[str], i_ :int):
+        assert tokens[i_] == "{"
+        bracket_ = ["{"]
+        #body_ = []
+        dq_ = collections.deque()
+        while len(bracket_) != 0:
+            i_ += 1
+            dq_.append(tokens[i_])
+            if tokens[i_] == "{":
+                bracket_.append(tokens[i_])
+            elif tokens[i_] == "}":
+                bracket_.pop()
+        while dq_[-1] != ";":
+            dq_.pop()
+        return dq_, i_
+
+    def read_function(self, tokens:list[str], i_ : int, dq):
+
+        
+        pass
+
     
 
     def LexerImpl(self, tokens: list, i_ : int): 
@@ -1572,6 +1701,33 @@ class Lexer:
                 return None
             elif tokens[i_] == "(":
                 dq.append(tokens[i_])
+                identifier_idx = self.GetIdenfitiferIndex(dq)
+                if identifier_idx < 0:
+                    pass
+                elif dq[identifier_idx - 1] == "*":
+                    pass
+                elif name_ != "":
+                    #i_ = self.read_function(tokens, i_)
+                    i_ += 1
+                    args = {}
+                    while tokens[i_] != ")":
+                        temp_ = []
+                        while tokens[i_] != "," and tokens[i_] != ")":
+                            temp_.append(tokens[i_])
+                            i_ += 1
+                        identifier_idx = self.GetIdenfitiferIndex(dq)
+                        
+                        id_ = self.read_complicate_type(temp_, identifier_idx - 1, identifier_idx + 1)
+                        if tokens[i_] == ")":
+                            i_ += 1
+                            break
+                        i_ += 1
+                    #while
+                    i_ += 1
+                    body_, i_ = self.read_function_body(tokens, i_)
+                    
+                    fb = FunctionBody(name_, CTypeFactory.auto_call_method(dq[identifier_idx - 1]), args, body_)
+                
                 pass
             elif tokens[i_] == ")":
                 pass
