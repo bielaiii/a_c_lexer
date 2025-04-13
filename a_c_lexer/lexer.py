@@ -1,6 +1,7 @@
 from ast import literal_eval
 import collections
 from curses.ascii import isalpha
+from dataclasses import field
 from enum import Enum, auto
 from math import nan
 from operator import le, truediv
@@ -37,6 +38,7 @@ class build_in_type(Enum):
     DEFINED_UNION = auto()
     DEFINED_ENUM = auto()
     CALL_FUNCTION = auto()
+    UNKNOWN_TYPE = auto()
 
     def __str__(self):
         temp_str = self.name.lower().replace("_", " ").replace("build in ", "")
@@ -46,8 +48,11 @@ class build_in_type(Enum):
     def is_build_in_type(self) -> bool:
         return True if self.value < 14 else False
 
-    def is_composite_type(self) -> bool:
-        return True if self.value >= 14 else False
+    #def is_composite_type(self) -> bool:
+    #    return True if self.value >= 14 else False
+
+    def __format__(self, format_spec: str) -> str:
+        return self.name.lower().replace("_", " ").replace("build in ", "")
 
 
 def SetType(type_: str) -> build_in_type | str:
@@ -77,22 +82,23 @@ def SetType(type_: str) -> build_in_type | str:
         case "float":
             return build_in_type.FLOAT
         case _:
-            return type_
+            return build_in_type.UNKNOWN_TYPE
 
 
 class C_type:
     def __init__(
         self,
-        type_: str,
+        type_: str | build_in_type,
         aka: str = "",
         is_const_=False,
         is_volatile_=False,
+        subtype : "C_type" = None,
     ):
-        self.using_type = SetType(type_)
+        self.using_type = SetType(type_) if isinstance(type_, str) else type_
         self.is_const = is_const_
         self.is_volatile = is_volatile_
         self.aka = aka
-        self.subtype = None
+        self.subtype = subtype
         # self.subtype = None
 
     def __str__(self) -> str:
@@ -104,6 +110,16 @@ class C_type:
             quan_ += "volatile "
 
         return f"{quan_}{self.using_type}"
+    
+    def __format__(self, format_spec: str) -> str:
+        """
+        s : simple 
+        v : verbose
+        """
+        if format_spec == "s" or format_spec == "":
+            return f"{self.using_type}"
+        else:
+            return f"{self.using_type}"
 
     def GetMember() -> list[tuple[str, "C_type"]]:
         pass
@@ -139,6 +155,13 @@ class C_type:
     def single_value(self):
         pass
 
+class UNKOWN_TYPE(C_type):
+    def __init__(self, type_: str, aka: str = "", is_const_=False, is_volatile_=False, subtype: C_type = None):
+        super().__init__(type_, type_, is_const_, is_volatile_, subtype)
+    
+    def __format__(self, format_spec: str) -> str:
+        return f"{self.aka}(CURRENT_UNKNOWN)"
+
 class identifier:
     all_identifier: dict[str, "identifier"] = {}
 
@@ -160,27 +183,37 @@ class identifier:
         self.is_volatile = is_volatile
         self.is_static = is_static
 
-        if self.type_.is_composite_type():
+        if self.type_.using_type == build_in_type.BUILD_IN_ARRAY:
             self.value = self.type_.init_param_dict()
-        elif self.type_.using_type == build_in_type.BUILD_IN_ARRAY:
-            self.value = self.type_.init_param_dict()
-        elif self.type_.using_type == build_in_type.BUILD_IN_POINTER and (self.type_.subtype.is_composite_type() or self.type_.subtype.using_type == build_in_type.BUILD_IN_ARRAY):
+        elif self.type_.using_type == build_in_type.BUILD_IN_POINTER: #and (self.type_.subtype.is_composite_type() or self.type_.subtype.using_type == build_in_type.BUILD_IN_ARRAY):
             self.value = None
+        elif self.type_.is_composite_type():
+            self.value = self.type_.init_param_dict()
             #self.value = self.type_.subtype.init_param_dict()
         else:
             self.value = None
 
-    def __str__(self) -> str:
-        temp_str = ""
-        if self.type_.is_composite_type():
-            temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
-        elif self.type_ == build_in_type.BUILD_IN_ARRAY:
-            temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : "
-            temp_str = f"{temp_str} {{{self.value.values()}}}"
-            return temp_str
+    def __format__(self, format_spec: str) -> str:
+        if isinstance(self.value, dict):
+            fmt_str = f"{{v:format_spec for v in self.value.values()}}"
+            return fmt_str
         else:
-            temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : {self.value}\n"
-        return temp_str
+            if format_spec == "" or format_spec == "s": 
+                return f"{self.annotated_name} = {self.value}"
+            else:
+                return f"{self.annotated_name} : {self.type_} = {self.value}"
+
+    #def __str__(self) -> str:
+    #    temp_str = ""
+    #    if self.type_.is_composite_type():
+    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
+    #    elif self.type_ == build_in_type.BUILD_IN_ARRAY:
+    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : "
+    #        temp_str = f"{temp_str} {{{self.value.values()}}}"
+    #        return temp_str
+    #    else:
+    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : {self.value}\n"
+    #    return temp_str
 
     def initialize_list(self, token_list: list[str], start_idx: int) -> int:
         if not isinstance(self.value, dict):
@@ -264,14 +297,20 @@ class identifier:
         pass
     
     def __format__(self, format_spec: str) -> str:
-        final_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
+        #final_str = f"    name : {self.annotated_name}    type : {self.type_}"
         if isinstance(self.value , dict):
             final_str += "{\n"
             for v_ in self.value.values():
                 final_str += f"{v_},\n"
             final_str += "}\n"
         else:
-            final_str += f"val : {self.value}\n"
+            final_str = ""
+            if format_spec == "" or format_spec == "s":
+                final_str += f"    val : {self.value}\n"
+            elif format_spec == "t":
+                final_str += f"    type : {self.type_}"
+            else:
+                final_str += f"    val : {self.value}\n"
         return final_str
     
     def __repr__(self) -> str:
@@ -286,7 +325,7 @@ class C_build_in_pointer(C_type):
         self, point_to_: C_type = None, is_const_=False, is_volatile_=False, aka: str = ""
     ):
         super().__init__(
-            build_in_type.BUILD_IN_POINTER, point_to_, is_const_, is_volatile_
+            build_in_type.BUILD_IN_POINTER, is_const_= is_const_, is_volatile_ =is_volatile_, subtype=point_to_
         )
         self.subtype = point_to_
 
@@ -298,6 +337,21 @@ class C_build_in_pointer(C_type):
             temp_type = temp_type.subtype
         return f"{super().__str__()} of {sss}"
         # return f"{super().__str__()} of {self.point_to_}"
+    
+    def __format__(self, format_spec: str) -> str:
+        """
+        s : simple 
+        v : verbose
+        """
+        if format_spec == "s" or format_spec == "":
+            if isinstance(self.subtype, C_build_in_array):
+                return f"{self.subtype.subtype} (*)[{self.subtype.size}]"
+            elif self.subtype.using_type == build_in_type.CALL_FUNCTION:
+                pass
+            else:
+                return f"{self.subtype} *"
+        else:
+            return f"is pointer of {self.subtype:v}"
 
 
 class C_function_pointer(C_type):
@@ -340,9 +394,10 @@ class CompositeType(C_type):
         is_const_=False,
         is_volatile_=False,
         aka: str = "",
+        subtype : C_type= None,
     ):
         assert type_ is not None
-        super().__init__(type_, is_const_, is_volatile_, aka)
+        super().__init__(type_, is_const_, is_volatile_, aka,subtype)
         self.field_: dict[str, C_type] = field_
         self.name = name_
 
@@ -364,7 +419,7 @@ class CompositeType(C_type):
     def init_param_dict(self) -> dict[str, identifier]:
         ret = {}
         for k_, v_ in self.field_.items():
-            if v_.using_type.is_composite_type():
+            if v_.type_.is_composite_type():
                 ret[k_] = v_.type_.init_param_dict()
             else:
                 ret[k_] = identifier(v_.type_, k_)
@@ -377,6 +432,18 @@ class CompositeType(C_type):
     def __getitem__(self, key: int):
         # assert isinstance(key, int)
         return self.field_[key]
+    
+    def __format__(self, format_spec: str) -> str:
+        if format_spec == "s" or format_spec == "":
+            #fmt_str = "{\n"
+            #for k_, v_ in self.field_.items():
+            #    fmt_str += f"{k_} : {v_},\n"
+            #fmt_str += "}"
+            fmt_str = f"{{\n{'    \n'.join([f'    {k} : {v:t}' for k, v in self.field_.items()])}\n}}"
+            return fmt_str
+        
+        else:
+            return super().__format__(format_spec)
 
 
 class C_build_in_array(CompositeType):
@@ -400,7 +467,7 @@ class C_build_in_array(CompositeType):
         # self.size = len(field_.keys())
         self.subtype = element_type
         super().__init__(
-            build_in_type.BUILD_IN_ARRAY, "", self.field_, is_const, is_volatile, aka
+            build_in_type.BUILD_IN_ARRAY, "", self.field_, is_const, is_volatile, aka, self.subtype
         )
         # self.size = len(self.field_.keys())
         # self.size_code = self.
@@ -552,8 +619,10 @@ class CTypeFactory:
             return CTypeFactory.get_pointer(*args, **kwargs)
         elif type_ == build_in_type.BUILD_IN_ARRAY:
             return CTypeFactory.get_array(*args, **kwargs)
-        else:
+        elif type_ in reserved_word.fundamental_type:
             return C_type(type_, *args, **kwargs)
+        else:
+            return UNKOWN_TYPE(type_, *args, **kwargs)
 
     @staticmethod
     def is_part_of_type(code_: str) -> False:
@@ -831,23 +900,23 @@ class Lexer:
     
     def is_literal(self, codes: str) -> identifier:
         if (temp := re.search(r"^\d+$", codes)) is not None:
-            name_ = temp.group(1)
+            name_ = codes
             val_ = int(name_)
-            return identifier(build_in_type.INT, name_, val_)
+            return identifier(C_type(build_in_type.INT), name_, val_)
         elif (temp := re.search(r"^0x[0-9abcedfABCEDF]+$", codes)) is not None:
-            name_ = temp.group(1)
+            name_ = codes
             val_ = int(name_, base=16)
-            return identifier(build_in_type.INT, name_, val_)
+            return identifier(C_type(build_in_type.INT), name_, val_)
         elif (temp := re.search(r"^0[01234567]+$", codes)) is not None:
-            name_ = temp.group(1)
+            name_ = codes
             val_ = int(name_, base=8)
-            return identifier(build_in_type.INT, name_, val_)
+            return identifier(C_type(build_in_type.INT), name_, val_)
         elif (temp := re.search(r"^0b[01]+$", codes)) is not None:
-            name_ = temp.group(1)
+            name_ = codes
             val_ = int(name_, base=2)
-            return identifier(build_in_type.INT, name_, val_)
+            return identifier(C_type(build_in_type.INT), name_, val_)
         elif (temp := re.search(r"^[\d+]+\.[\d+]+f?$", codes)) is not None:
-            name_ = temp.group(1)
+            name_ = codes
             type_ = build_in_type.DOUBLE
             val_ = 0
             if name_.endswith("f"):
@@ -857,8 +926,8 @@ class Lexer:
                 val_ = float(val_)
             return identifier(type_, name_, val_)
         elif (temp := re.search(r"^(\".*?\"|\'.*?\')$", codes)) is not None:
-            name_ = temp.group(1)
-            return identifier(C_build_in_pointer(build_in_type.CHAR), name_, name_)
+            name_ = codes
+            return identifier(C_build_in_pointer(C_type(build_in_type.CHAR)), name_, name_)
         return None
 
     def StringToEnum(self, type_str: str) -> build_in_type:
@@ -1109,11 +1178,16 @@ class Lexer:
                             if left > 0 and tokens[left - 1] == "long":
                                 base_type += " long"
                                 left-= 1
-                    if left > 0 and tokens[left  -1] in ["signed","unsigned"]:
-                        left - 1
-                        if tokens[left] == "unsigned":
-                            base_type += f" {tokens[left]}"
-                    return C_type(base_type)
+                    dq = collections.deque()
+                    while left >= 0:
+                        #if left > 0 and tokens[left  -1] in ["signed","unsigned"]:
+                        if tokens[left] in reserved_word.frament_type_key:
+                            dq.appendleft(tokens[left])
+                            base_type += f"{tokens[left]}"
+                        left -= 1
+                        """                         if tokens[left] == "unsigned":
+                            base_type += f" {tokens[left]}" """
+                    return C_type(" ".join(dq))
                 elif (
                     tokens[left] in Lexer.all_type.keys()
                     or tokens[left] in Lexer.all_typedef.keys()
@@ -1124,6 +1198,8 @@ class Lexer:
                     else:
                         temp_type = Lexer.all_typedef[tokens[left]]
                     return temp_type
+                else:
+                    return CTypeFactory.auto_call_method(tokens[left])
             
                     
 
@@ -1216,7 +1292,7 @@ class Lexer:
         return False
     
     def is_legal_identifier(self, code : str) -> bool:
-        regex = r"([a-zA-Z\_]?[\w\_]+)"
+        regex = r"(^[a-zA-Z\_]+[\w\_]*?$)"
         if (result_ := re.search(regex, code)) is not None:
             return True if result_.group(1) == code else False
         return False
@@ -1266,20 +1342,22 @@ class Lexer:
             return temp_
         return inner()
 
-    def consume_compound(self, tokens:list[str], i_ : int):
+    def consume_compound(self, tokens:list[str], i_ : int = 0):
         bracket = []
         len_ = len(tokens)
-        
-        #temp.append(tokens[i_])
-        if tokens[i_] == "{":
-            bracket.append("}")
-        elif tokens[i_] == "(":
-            bracket.append(")")
-        elif tokens[i_] == "[":
-            bracket.append("]")
-        elif tokens[i_] in ["}", "]", ")"]:
-            assert bracket[-1] == tokens[i_]
-            bracket.pop()
+        #i_ = 0
+        while i_ < tokens:
+            
+            #temp.append(tokens[i_])
+            if tokens[i_] == "{":
+                bracket.append("}")
+            elif tokens[i_] == "(":
+                bracket.append(")")
+            elif tokens[i_] == "[":
+                bracket.append("]")
+            elif tokens[i_] in ["}", "]", ")"]:
+                assert bracket[-1] == tokens[i_]
+                bracket.pop()
         return i_
     #def consume_function_decleration(self, tokens: list[str], i_ : int):
     #    len_ = len(tokens)
@@ -1293,6 +1371,57 @@ class Lexer:
     def find_identifier_index(self, tokens: list[str]):
         pass
 
+    def initialization_list1(self, tokens):
+        pass
+
+    def initialization_list_impl(self, tokens : list[str], i_ : int):
+        temp_ = []
+        if tokens[i_] == "{":
+            val_, i_ =  self. initialization_list(tokens, i_)
+            return val_, i_ 
+
+        while tokens[i_] != "}" and tokens[i_] != ",":
+            temp_.append(tokens[i_])
+            i_ += 1
+        val_ = "".join(temp_)
+        if self.is_literal(val_):
+            #signed_val = tokens[i_]
+            return val_, i_
+        else:
+            return val_, i_
+        
+
+
+    def initialization_list(self, tokens : list[str], i_ : int) -> tuple[list[str, int, dict[str, int]], int]:
+        #i_ = 0
+        len_ = len(tokens)
+        avail_sentence : list[list[str]] = []
+        temp_ = collections.deque()
+        lst_ = []
+        signed_val : int | str| dict[str, list | int | str, dict] = None
+        #assert tokens[i_] == "{"
+        i_ += 1
+        
+
+        while tokens[i_] != "}":
+            if tokens[i_] == ".":
+                i_ += 1
+                k_ = tokens[i_]
+                i_+= 2
+                temp_ , i_ = self.initialization_list_impl(tokens, i_)
+                lst_.append({k_ : temp_})
+            
+            else:
+                temp_ , i_ = self.initialization_list_impl(tokens, i_)
+                lst_.append(temp_)
+            
+            if tokens[i_] == "}":
+                break
+            i_ += 1
+        i_ += 1
+         
+        return lst_, i_
+                        
     
 
     def LexerImpl(self, tokens: list, i_ : int): 
@@ -1315,8 +1444,9 @@ class Lexer:
         while i_ < len_:
             if tokens[i_] == "#":
                 i_ = self.consume_preprocess(tokens, i_)
-            elif tokens[i_] + tokens[i_ + 1] in ["//", "/*"]:
-                i_ = self.consume_comments(tokens, i_)
+            elif tokens[i_] == "/":
+                if tokens[i_ + 1] in ["/", "*"]:
+                    i_ = self.consume_comments(tokens, i_)
                 continue
             elif tokens[i_] in ["\t", "\n", " "]:
                 pass
@@ -1417,7 +1547,10 @@ class Lexer:
                         #continue
                     if tokens[i_] in ["," ,";"]:
                         Lexer.all_typedef[temp_name] = identifier_ if temp_type is None else identifier_.using_type
+                        #print(f"{identifier_}")
                         temp_type = None
+                while len(dq):
+                    dq.pop()
                 a = 0
             elif tokens[i_] == ";":
                 assert identifier_ is not None
@@ -1431,7 +1564,7 @@ class Lexer:
                     identifier_idx = self.GetIdenfitiferIndex(dq)
                     complicate_type = self.read_complicate_type(dq, identifier_idx -1, identifier_idx + 1);
                     id_ =   identifier(complicate_type, name_, nan, self.Const(), self.Volatile(), self.Static())
-                    Lexer.all_typedef[id_.annotated_name] = id_
+                    #Lexer.all_typedef[id_.annotated_name] = id_
                     is_typing = False
                     self.i_ = i_
                     return id_
@@ -1469,8 +1602,16 @@ class Lexer:
                 dq.append(tokens[i_])
                 name_ = tokens[i_]
             elif tokens[i_] == "=":
-
-                dq.append(tokens[i_])
+                
+                identifier_idx = self.GetIdenfitiferIndex(dq)
+                temp_type = self.read_complicate_type(dq, identifier_idx - 1, identifier_idx + 1)
+                id_ = identifier(temp_type, name_, None, self.Const(), self.Volatile(), self.Static())
+                #dq.append(tokens[i_])
+                i_ += 1
+                assign_list, i_  = self.initialization_list(tokens, i_)
+                print(assign_list)
+                while len(dq):
+                    dq.pop()
                 i_ += 1
                 val_ = self.is_literal(tokens[i_])
             
@@ -1782,18 +1923,43 @@ class Lexer:
                 tokens_.append(tokens[i_])
             i_ += 1
         return tokens_
+    
+    def regex_remove_comments(self, codes):
+        # 去除所有多行注释
+        code = re.sub(r'/\*.*?\*/', '', codes, flags=re.DOTALL)
+        # 去除所有单行注释
+        code = re.sub(r'//.*', '', code)
+        return code
+    def remove_comments_macros(self, code):
+        code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+        code = re.sub(r'//.*', '', code)
+        lines = code.splitlines()
+        result = []
 
+        keep_if_block = False
+
+        for line in lines:
+            stripped = line.strip()
+            
+            if re.match(r'#\s*(if|ifdef|ifndef|elif|else|endif)\b', stripped):
+                continue
+            elif re.match(r'#\s*(define|undef|include|pragma|error|line)\b', stripped):
+                continue
+            else:
+                result.append(line)
+
+        return '\n'.join(result)
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
-            ret = self.split_token(codes)
+            ret = self.split_token(self.remove_comments_macros(codes))
             #ret = self.remove_preprocess(self.split_token(codes))
             #assert " " not in ret
 
             self.LexerImpl(ret, 0)
 
-        for k, v in Lexer.all_typedef.items():
-           print(f"{k}, {v}")
+        #for k, v in Lexer.all_typedef.items():
+        print(f"{Lexer.all_typedef["foo"]}")
 
 
 if __name__ == "__main__":
