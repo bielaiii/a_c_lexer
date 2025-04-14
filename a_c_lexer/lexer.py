@@ -272,7 +272,7 @@ class identifier:
             str_values = [x.stringnify_value for x in self.value.values()]
             return f"{{{",".join(str_values)} }}"
 
-    def __setitem__(self, key: str | int | Deque, value):
+    """ def __setitem__(self, key: str | int | Deque, value):
         if isinstance(key, Deque)and len(key) > 0: 
             v_ = key.popleft()#
             if len(key) == 1:
@@ -293,7 +293,7 @@ class identifier:
             return self.value[val_][key]
         else:
             assert self.type_.is_composite_type()
-            return self.value[key]
+            return self.value[key] """
 
     def is_chain_chain_identifier(self, tokens : Deque):
         # if self.type_.
@@ -310,7 +310,7 @@ class identifier:
     def print_struct_in_json(self)->str:
         pass
 
-    def __setitem__(self, key :list[str], val):
+    def __setitem__(self, key :tuple[str], val):
 
         if isinstance(key, str):
             assert isinstance(self.value, dict)
@@ -327,9 +327,18 @@ class identifier:
                 self.value = val
         elif isinstance(self.value, dict):
             assert len(key) > 1
-            k_ = key.popleft()
-            key.popleft()
-            self.value[key] = val
+            key = list(key)
+            k_ = key.pop()
+            next_ = key.pop()
+            #if next_ == "[":
+            #    next_ = key.popleft()
+            #    assert next_.isdigit(), f"{next_} is not num"
+            #    key.popleft()
+            #    self.value[k_][key] = val
+            #else:
+            #    pass
+            #key.popleft()
+            self.value[k_][tuple(key)] = val
 
         else:
             assert not self.type_.had_multiple_members()
@@ -347,8 +356,8 @@ class identifier:
                 raise AssertionError
         elif isinstance(self.value, dict):
             assert len(key) > 1
-            k_ = key.popleft()
-            key.popleft()
+            k_ = key.pop()
+            key.pop()
             return self.value[k_][key]
         else:
             assert not self.type_.had_multiple_members()
@@ -364,10 +373,15 @@ class identifier:
         enable_value = "v" in fmt_
         if isinstance(self.value, dict):
             final_str += "{\n"
-            final_str += "\n".join([
-                f"{'name : ' if enable_label else '':6}{v_.annotated_name if enable_name else '':^10}{'type : ' if enable_label else '': <10}{v_.type_ if enable_type else '': >20}{'val : ' if enable_label else '':>10}{v_.value if enable_value else '':>50}"
-                for v_ in self.value.values()
-            ])
+            final_str += f"{'name : ' if enable_label else '':6}{self.annotated_name if enable_name else '':^10}"
+            final_str += f"{'type : ' if enable_label else '': <10}{self.type_ if enable_type else '': >20}"
+            if isinstance(self.value, dict):
+                final_str+= "\n{\n"
+                for v__ in self.value.values():
+                    final_str += f"{v__}"
+                final_str = "\n}\n"
+            else:
+                final_str += f"{'val : ' if enable_label else '':>10}{self.value if enable_value else '':>50}"
             #for v_ in self.value.values():
             #    final_str += f"{v_:{format_spec}},\n"
 
@@ -503,12 +517,13 @@ class CompositeType(C_type):
     l : stand for label e.g. type : ${type}
     """    
     def __format__(self, format_spec: str) -> str:
-        if format_spec == "s" or format_spec == "":
+        if "v" in format_spec or "t" in format_spec :
+            
             #fmt_str = "{\n"
             #for k_, v_ in self.field_.items():
             #    fmt_str += f"{k_} : {v_},\n"
             #fmt_str += "}"
-            fmt_str = f"{{\n{'    \n'.join([f'    {k:30} : {v:f"{format_spec}t"}' for k, v in self.field_.items()])}\n}}"
+            fmt_str = f"{{\n{'    \n'.join([f'    {k:30} : {v:t"}' for k, v in self.field_.items()])}\n}}"
             return fmt_str
         
         else:
@@ -867,7 +882,7 @@ class Statement:
 
         len_ = len(self.tokens)
         ret_ = collections.deque()
-        dq_ = collections.deque()
+        dq_ = [] #collections.deque()
         save_ = collections.deque()
         cont_sign = continuous_signing()
         while i_ < len_:
@@ -887,10 +902,13 @@ class Statement:
                     elif tokens[i_] == ".":
                         dq_.append("->")
                     elif tokens[i_] == "[":
-                        dq_.append("[")
+                        dq_.append(".")
+                        i_ += 1
                         while tokens[i_] != "]":
+                            assert tokens[i_].isdigit()
                             dq_.append(tokens[i_])
                             i_ += 1
+                        #dq_.append(".")
                     elif tokens[i_] == "=":
                         #dq_.append("=")
                         if len(dq_):
@@ -909,10 +927,15 @@ class Statement:
                 if len(dq_):
                     #ret_[-1].append(deepcopy(dq_))
                     cont_sign.get_item = deepcopy(dq_)
-                    cont_sign.set_item.popleft()
-                    cont_sign.set_item.popleft()
-                    cont_sign.get_item.popleft()
-                    cont_sign.get_item.popleft()
+                    cont_sign.set_item.reverse()
+                    cont_sign.get_item.reverse()
+                    cont_sign.set_item = cont_sign.set_item[:-2]
+                    #cont_sign.set_item = cont_sign.set_item[2:]  #.popleft()
+                    cont_sign.get_item = cont_sign.get_item[:-2]
+                    #cont_sign.get_item =cont_sign.get_item #.popleft()
+                    #cont_sign.get_item = reversed(cont_sign.get_item)
+                    #cont_sign.set_item = reversed(cont_sign.set_item)
+                    
                     ret_.append(deepcopy(cont_sign))
                     dq_.clear()
                 i_ += 1
@@ -2193,8 +2216,12 @@ class Lexer:
         #print(f"{Lexer.all_typedef["foo"]}")
 
         for t in Lexer.all_function["init_func"].statement_.ret:
+            print(t.set_item, t.get_item)
             reg_[t.set_item] = cfg_[t.get_item]
-        print(f"{reg_:nvtl}")
+        #print(f"{reg_:nvtl}")
+        print(f"{Lexer.all_typedef["bar"]:nvtl}")
+        #print(f"{Lexer.all_typedef["bar"]:nvtl}")
+        
 
 if __name__ == "__main__":
     parser_ = Lexer()
