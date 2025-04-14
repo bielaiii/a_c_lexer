@@ -4,6 +4,7 @@ from copy import deepcopy
 from curses.ascii import isalpha
 from dataclasses import field
 from enum import Enum, auto
+from logging import raiseExceptions
 from math import nan
 from operator import le, truediv
 import queue
@@ -11,6 +12,7 @@ import random
 import re
 import stat
 import string
+from sys import exception
 import token
 from typing import Deque, Generator, TypeAlias, final
 import uuid
@@ -42,14 +44,10 @@ class build_in_type(Enum):
 
     def __str__(self):
         temp_str = self.name.lower().replace("_", " ").replace("build in ", "")
-
         return temp_str
 
     def is_build_in_type(self) -> bool:
         return True if self.value < 14 else False
-
-    #def is_composite_type(self) -> bool:
-    #    return True if self.value >= 14 else False
 
     def __format__(self, format_spec: str) -> str:
         fmt_str = self.name.lower().replace("_", " ").replace("build in ", "")
@@ -203,7 +201,6 @@ class identifier:
             self.value = None
         elif self.type_.is_composite_type():
             self.value = self.type_.init_param_dict()
-            # self.value = self.type_.subtype.init_param_dict()
         else:
             self.value = None
 
@@ -216,18 +213,6 @@ class identifier:
                 return f"{self.annotated_name} = {self.value}"
             else:
                 return f"{self.annotated_name} : {self.type_} = {self.value}"
-
-    # def __str__(self) -> str:
-    #    temp_str = ""
-    #    if self.type_.is_composite_type():
-    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\n"
-    #    elif self.type_ == build_in_type.BUILD_IN_ARRAY:
-    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : "
-    #        temp_str = f"{temp_str} {{{self.value.values()}}}"
-    #        return temp_str
-    #    else:
-    #        temp_str = f"name : {self.annotated_name}\ntype : {self.type_}\nval : {self.value}\n"
-    #    return temp_str
 
     def initialize_list(self, token_list: list[str], start_idx: int) -> int:
         if not isinstance(self.value, dict):
@@ -272,40 +257,14 @@ class identifier:
             str_values = [x.stringnify_value for x in self.value.values()]
             return f"{{{",".join(str_values)} }}"
 
-    """ def __setitem__(self, key: str | int | Deque, value):
-        if isinstance(key, Deque)and len(key) > 0: 
-            v_ = key.popleft()#
-            if len(key) == 1:
-                self.value = value
-            else:
-                self.value[v_][key] = value
-        else:
-            assert not self.type_.is_composite_type()
-            if isinstance(key, Deque):
-                key = key.popleft()
-            self.value[key] = value
-
-    def __getitem__(self, key: str | int | Deque):
-        if isinstance(key, Deque) : 
-            if len(key) == 1:
-                return self.value[key.popleft()]
-            val_ = key.popleft()
-            return self.value[val_][key]
-        else:
-            assert self.type_.is_composite_type()
-            return self.value[key] """
-
     def is_chain_chain_identifier(self, tokens : Deque):
-        # if self.type_.
         if self.type_.is_composite_type():
             if (len(tokens) == 1) and tokens[0] == self.annotated_name:
                 return True
             else:
-                # return False
                 self.is_chain_chain_identifier(tokens.popleft())
         else:
             return True
-        # pass
 
     def print_struct_in_json(self)->str:
         pass
@@ -330,14 +289,7 @@ class identifier:
             key = list(key)
             k_ = key.pop()
             next_ = key.pop()
-            #if next_ == "[":
-            #    next_ = key.popleft()
-            #    assert next_.isdigit(), f"{next_} is not num"
-            #    key.popleft()
-            #    self.value[k_][key] = val
-            #else:
-            #    pass
-            #key.popleft()
+           
             self.value[k_][tuple(key)] = val
 
         else:
@@ -346,9 +298,7 @@ class identifier:
 
 
     def __getitem__(self, key :list[str]):
-        """         if isinstance(key, str):
-            assert isinstance(self.value, dict)
-            return self.value[key].value """
+       
         if len(key) == 1:
             if isinstance(self.value, dict):
                 return self.value[key[0]].value
@@ -364,37 +314,22 @@ class identifier:
             return self
 
     def __format__(self, format_spec: str) -> str:
-        # final_str = f"    name : {self.annotated_name}    type : {self.type_}"
         final_str = ""
         fmt_ = re.split("|", format_spec)
         enable_label = "l" in fmt_
         enable_name = "n" in fmt_
         enable_type = "t" in fmt_
         enable_value = "v" in fmt_
+        final_str += f"{'name : ' if enable_label else '':6}{self.annotated_name if enable_name else '':^10}"
+        final_str += f"{'type : ' if enable_label else '': <10}{self.type_ if enable_type else '': >20}"
+        final_str += f"{'val : ' if enable_label else ''}"
         if isinstance(self.value, dict):
-            final_str += "{\n"
-            final_str += f"{'name : ' if enable_label else '':6}{self.annotated_name if enable_name else '':^10}"
-            final_str += f"{'type : ' if enable_label else '': <10}{self.type_ if enable_type else '': >20}"
-            if isinstance(self.value, dict):
-                final_str+= "\n{\n"
-                for v__ in self.value.values():
-                    final_str += f"{v__}"
-                final_str = "\n}\n"
-            else:
-                final_str += f"{'val : ' if enable_label else '':>10}{self.value if enable_value else '':>50}"
-            #for v_ in self.value.values():
-            #    final_str += f"{v_:{format_spec}},\n"
-
-            final_str += "\n}\n"
+            final_str = "\n{\n"
+            for v__ in self.value.values():
+                final_str += f"{format(v__, format_spec)}"
+            final_str = "\n}\n"
         else:
-            final_str = ""
-            return f"{"name : " if enable_label else ""}{self.annotated_name if enable_name else ""}{self.type_ if enable_type else ""}{"val : " if enable_label else ""} {self.value if enable_value else ""}    {"val : " if enable_label else ""} {self.value if enable_value else ""}"
-            if format_spec == "" or format_spec == "s":
-                final_str += f"    val : {self.value}\n"
-            elif format_spec == "t":
-                final_str += f"    type : {self.type_}"
-            else:
-                final_str += f"    val : {self.value}\n"
+            final_str += f"{self.value if enable_value else ""}"
         return final_str
 
 
@@ -517,17 +452,16 @@ class CompositeType(C_type):
     l : stand for label e.g. type : ${type}
     """    
     def __format__(self, format_spec: str) -> str:
-        if "v" in format_spec or "t" in format_spec :
-            
-            #fmt_str = "{\n"
-            #for k_, v_ in self.field_.items():
-            #    fmt_str += f"{k_} : {v_},\n"
-            #fmt_str += "}"
-            fmt_str = f"{{\n{'    \n'.join([f'    {k:30} : {v:t"}' for k, v in self.field_.items()])}\n}}"
+
+        if format_spec == "to":
+            fmt_str = f"{self.name} = {{\n"
+            for v_ in self.field_.values():
+                fmt_str += f".{v_.annotated_name} : {v_.type_.using_type}\n"
+            fmt_str += "}\n"
             return fmt_str
-        
-        else:
-            return super().__format__(format_spec)
+        elif format_spec == "t":
+            #return super().__format__(format_spec)
+            return ""
 
 
 class C_build_in_array(CompositeType):
@@ -703,7 +637,7 @@ class CTypeFactory:
             return CTypeFactory.get_pointer(*args, **kwargs)
         elif type_ == build_in_type.BUILD_IN_ARRAY:
             return CTypeFactory.get_array(*args, **kwargs)
-        elif type_ in reserved_word.fundamental_type:
+        elif type_ in reserved_word.fundamental_type or (isinstance(type_, build_in_type) and type_.is_build_in_type()):
             return C_type(type_, *args, **kwargs)
         else:
             return UNKOWN_TYPE(type_, *args, **kwargs)
@@ -724,6 +658,60 @@ C_AnyType: TypeAlias = (
     | CompositeType
 )
 
+class TokenEmiter():
+    def __init__(self, tokens : collections.deque):
+        self.tokens = tokens
+        self.i_ = 0
+        self.len = len(tokens)
+        self.token = None
+        self.it_i = 0
+    
+    def __getitem__(self, key: int) -> str:
+        return self.tokens[key]
+    
+    def __iter__(self):
+        return self 
+
+    def __next__(self):
+        self.it_i += 1
+        #val_ = self.token[self.it_i]
+        yield self.token[self.it_i]
+    
+    def move_seek(self, i_ : int):
+        self.it_i += i_
+        return self
+
+    def peek(self, i_ : int = 1)-> str:
+        try:
+            return self.tokens[self.it_i + i_]
+        except IndexError:
+            return None
+    
+    def update(self, i_: int = 1):
+        self.move_seek(i_)
+        try:
+            return self[self.it_i]
+        except IndexError:
+            return None
+
+    def pass_white_space(self):
+        while self.it_i < self.len:
+            while self.it_i < self.len and self.tokens[self.it_i] in ["\t", "\n", " "]:
+                self.it_i += 1
+            val_ = self.tokens[self.it_i]
+            yield val_
+            self.it_i += 1
+    
+    def find_until(self, target):
+        for token in self:
+            if token in target:
+                break
+        return self.it_i
+    def find_until_not(self, target):
+        for token in self:
+            if token not in target:
+                break
+        return self.it_i
 
 class RedefineType:
     def __init__(self, name: str, type_: C_type):
@@ -789,20 +777,56 @@ class Statement:
         self.find_chaining_signment(self.tokens)
 
         self.statement_: dict[str, dict[int, list[str]]] = {}
+    
+    @staticmethod
+    def surround(TE: TokenEmiter):
+        bracket_ = collections.deque()
+        for token in TE:
+            if token == "{":
+                bracket_.append("}")
+            elif token == "(":
+                bracket_.append(")")
+            elif token == "[":
+                bracket_.append("]")
+            elif token == "]":
+                assert bracket_.pop() == "]"
+            elif token == ")":
+                assert bracket_.pop() == ")"
+            elif token == "}":
+                assert bracket_.pop() == "}"
+                #bracket_.append("}")
+            if len(bracket_) == 0:
+                break
+    
 
-    # todo: no {}
+    @staticmethod
+    def consume_complete_compound(TE : TokenEmiter):
+        token = TE.peek(0)
+        for token in TE:
+            if token in ["if", "for", "while"]:
+                TE.find_until("[{(")
+                Statement.surround(TE)
+                
+                if TE.peek(1) == "{":
+                    TE.update()
+                    Statement.surround(TE)
+                elif TE.peek(1) == "\n":
+                    TE.update()
+                    Statement.consume_complete_compound()
+                else:
+                    raise exception
+
+
+
     def consume_statement_impl(self, tokens: list[str], i_: int):
         temp_dict = {}
         if len(tokens) == 0:
             return
         if tokens[i_] == "if":
-            # i_ += 2
             temp_dict = self.if_statememt
         elif token[i_] == "for":
-            # i_ += 3
             temp_dict = self.for_statememt
         elif tokens[i_] == "while":
-            # i_ += 5
             temp_dict = self.while_statememt
         else:
             return
@@ -876,8 +900,8 @@ class Statement:
                 i_ += 1
         return i_ 
 
-    def find_chaining_signment(self, tokens :list[str]):
-        i_ = 0
+    def find_chaining_signment(self, TE: TokenEmiter):
+        #i_ = 0
         tokens = self.tokens
 
         len_ = len(self.tokens)
@@ -885,43 +909,46 @@ class Statement:
         dq_ = [] #collections.deque()
         save_ = collections.deque()
         cont_sign = continuous_signing()
-        while i_ < len_:
-            if tokens[i_] in ["if", "for", "while"]:
-                i_= self.consume_compound(i_)
+        for token in TE:
+            if token in ["if", "for", "while"]:
+                self.surround(TE)
             else:
                 no_chaining = False
-                while tokens[i_] != ";":
+                while token != ";":
                     if no_chaining:
-                        i_ += 1
-                        continue
-                    if is_legal_identifier(tokens[i_]):
-                        dq_.append(tokens[i_])
-                    elif tokens[i_] == "-" and tokens[i_ + 1] == ">":
+                        TE.find_until("\n")
+                        #i_ += 1
+                        break
+                    if is_legal_identifier(token):
+                        dq_.append(token)
+                    elif token == "-" and TE.peek(1) == ">":
                         dq_.append("->")
-                        i_ += 1
-                    elif tokens[i_] == ".":
+                        TE.move_seek(1)
+                        #i_ += 1
+                    elif token == ".":
                         dq_.append("->")
-                    elif tokens[i_] == "[":
+                    elif token == "[":
                         dq_.append(".")
-                        i_ += 1
-                        while tokens[i_] != "]":
-                            assert tokens[i_].isdigit()
-                            dq_.append(tokens[i_])
-                            i_ += 1
-                        #dq_.append(".")
-                    elif tokens[i_] == "=":
+                        #i_ += 1
+                        while token != "]":
+                            #assert token.isdigit()
+                            dq_.append(token)
+                            #i_ += 1
+                            token = TE.update()
+                        dq_.append(token)
+                    elif token == "=":
                         #dq_.append("=")
                         if len(dq_):
                             #ret_.append(deepcopy(dq_))
                             cont_sign.set_item = deepcopy(dq_)
                             dq_.clear()
 
-                    elif tokens[i_] in ["\n", "\t", " "]:
+                    elif token in ["\n", "\t", " "]:
                         pass
                     else:
                         no_chaining = True
                         dq_.clear()
-                    if tokens[i_]== ";":
+                    if token== ";":
                         break
                     i_ += 1
                 if len(dq_):
@@ -930,11 +957,7 @@ class Statement:
                     cont_sign.set_item.reverse()
                     cont_sign.get_item.reverse()
                     cont_sign.set_item = cont_sign.set_item[:-2]
-                    #cont_sign.set_item = cont_sign.set_item[2:]  #.popleft()
                     cont_sign.get_item = cont_sign.get_item[:-2]
-                    #cont_sign.get_item =cont_sign.get_item #.popleft()
-                    #cont_sign.get_item = reversed(cont_sign.get_item)
-                    #cont_sign.set_item = reversed(cont_sign.set_item)
                     
                     ret_.append(deepcopy(cont_sign))
                     dq_.clear()
@@ -1080,6 +1103,15 @@ class FunctionBody:
 
     def read_simple_assignment(self, tokens: list[str], i_: int):
         len_ = len(tokens)
+
+def pass_white_space(tokens: list[str], i_: int):
+    len_ = len(tokens)
+    while i_ < len_ and tokens[i_] in [" ", "\n", "\t"]:
+        i_ += 1
+    return i_
+
+
+
 
 
 class Lexer:
@@ -1490,9 +1522,9 @@ class Lexer:
         return False
     
     def is_legal_identifier(self, code : str) -> bool:
-        regex = r"(^[a-zA-Z\_]+[\w\_]*?$)"
+        regex = r"^[a-zA-Z\_]+[\w\_]*?$"
         if (result_ := re.search(regex, code)) is not None:
-            return True if result_.group(1) == code else False
+            return True
         return False
     
     def is_reserved_word(self, code : str) -> bool:
@@ -1572,65 +1604,66 @@ class Lexer:
     def initialization_list1(self, tokens):
         pass
 
-    def initialization_list_impl(self, tokens : list[str], i_ : int):
+    def initialization_list_impl(self, TE : TokenEmiter):
         temp_ = []
-        if tokens[i_] == "{":
-            val_, i_ =  self. initialization_list(tokens, i_)
-            return val_, i_ 
-
-        while tokens[i_] != "}" and tokens[i_] != ",":
-            temp_.append(tokens[i_])
-            i_ += 1
+        for token in TE.pass_white_space():
+            if token == "}" or token == ",":
+                break
+            temp_.append(token)
         val_ = "".join(temp_)
         if self.is_literal(val_):
-            #signed_val = tokens[i_]
-            return val_, i_
+            return val_
         else:
-            return val_, i_
+            return val_
         
 
 
-    def initialization_list(self, tokens : list[str], i_ : int) -> tuple[list[str, int, dict[str, int]], int]:
-        #i_ = 0
-        len_ = len(tokens)
-        avail_sentence : list[list[str]] = []
+    def initialization_list(self, TE: TokenEmiter) -> tuple[list[str, int, dict[str, int]], int]:
         temp_ = collections.deque()
         lst_ = []
-        signed_val : int | str| dict[str, list | int | str, dict] = None
-        #assert tokens[i_] == "{"
-        i_ += 1
-        
-
-        while tokens[i_] != "}":
-            if tokens[i_] == ".":
-                i_ += 1
-                k_ = tokens[i_]
-                i_+= 2
-                temp_ , i_ = self.initialization_list_impl(tokens, i_)
+        TE.update()
+        for token in TE.pass_white_space():
+        #while token != "}":
+            if token == ".":
+                k_ = TE.update()
+                TE.update(2)
+                temp_ = self.initialization_list_impl(TE)
                 lst_.append({k_ : temp_})
-            
-            else:
-                temp_ , i_ = self.initialization_list_impl(tokens, i_)
+                print(lst_)
+            elif token == "{":
+                temp_ = self.initialization_list(TE)
                 lst_.append(temp_)
-            
-            if tokens[i_] == "}":
+                print(lst_)
+            elif token == "}":
                 break
-            i_ += 1
-        i_ += 1
+            else:
+                temp_ = self.initialization_list_impl(TE)
+                lst_.append(temp_)
+                print(lst_)
+            
+            token = TE.peek(0)
+            if token == ",":
+                TE.update()
+                continue
+            if token == "}":
+                
+                break
+            token = TE.update()
          
-        return lst_, i_
+        return lst_
 
-    def read_function_body(self, tokens :list[str], i_ :int):
-        assert tokens[i_] == "{"
+    def read_function_body(self, TE : TokenEmiter):
+        token = next(TE)
+        assert token == "{"
         bracket_ = ["{"]
         #body_ = []
         dq_ = collections.deque()
         while len(bracket_) != 0:
             i_ += 1
-            dq_.append(tokens[i_])
-            if tokens[i_] == "{":
-                bracket_.append(tokens[i_])
-            elif tokens[i_] == "}":
+            dq_.append(token)
+            if token == "{":
+                bracket_.append(token)
+            elif token == "}":
                 bracket_.pop()
         while dq_[-1] != ";":
             dq_.pop()
@@ -1640,16 +1673,74 @@ class Lexer:
 
         
         pass
-
     
 
-    def LexerImpl(self, tokens: list, i_ : int): 
-        len_ = len(tokens)
+    def parse_enum(self, TE : TokenEmiter):
+        i_ = 0
+        auto_val = 0
+        it_ = TE.pass_white_space()
+        member_  : dict[str, identifier] = {}
+        for token in TE.pass_white_space():# := next(it_)) != "}":
+            if is_legal_identifier(token):
+                name_ = token
+            elif token == ",":
+                member_[name_] = identifier(CTypeFactory.auto_call_method("int"), name_, auto_val)
+            if TE.peek(1) == "=" and TE.peek(2).isalnum() :
+                #next(it_)
+                val_ = TE.peek(2)
+                TE.update(2)
+                assert val_.isdigit()
+                auto_val = int(val_)
+            else:
+                auto_val += 1
+            if token == "}":
+                break
+
+        return member_
+    
+    def parse_struct(self, TE: TokenEmiter):
+        i_ = 0
+        it_ = TE.pass_white_space()
+        member_  : dict[str, identifier] = {}
+        dq_ = collections.deque()
+        token = TE.update()
+        while token != "}":
+            if is_legal_identifier(token):
+                dq_.append(token)
+            elif token == "[":
+                dq_.append(token)
+                while token != "]":
+                    dq_.append(token)
+                    token = TE.update(1)
+                dq_.append(token)
+            elif token == "*":
+                dq_.append(token)
+            elif token == "(" or token == ")":
+                dq_.append(token)
+            elif token == ";":
+                name_i = self.GetIdenfitiferIndex(dq_)
+                name_ = ""
+                if name_i >= 0:
+                    name_ = dq_[name_i]
+                
+                type_ = self.read_complicate_type(dq_, name_i - 1, name_i + 1)
+                id_ = identifier(type_, name_, None)
+                member_[name_] = id_
+                
+                dq_.clear()
+            token = TE.update()
+        TE.move_seek(1)
+            
+        return member_
+    
+
+    def LexerImpl(self, TE : TokenEmiter): 
+        #len_ = len(tokens)
         #i_ = 0
         identifier_ =""
         type_ : C_type = None
         last_id_ = ""
-        name_ : str = ""
+        #name_ : str = ""
         id_ : identifier| C_type = None
         is_typing = False
         is_const = False
@@ -1660,213 +1751,208 @@ class Lexer:
         dq : list[str] =[]
         endl_ = "{"
         #i_ = 0
-        while i_ < len_:
-            if tokens[i_] == "#":
-                i_ = self.consume_preprocess(tokens, i_)
-            elif tokens[i_] == "/":
-                if tokens[i_ + 1] in ["/", "*"]:
-                    i_ = self.consume_comments(tokens, i_)
-                continue
-            elif tokens[i_] in ["\t", "\n", " "]:
+        
+        #while i_ < len_:
+        for token in TE.pass_white_space():
+            
+            if token in ["\t", "\n", " "]:
                 pass
             
-            elif tokens[i_] == "typedef":
+            elif token == "typedef":
                 is_typing = True
-            elif tokens[i_] == "const":
+            elif token == "const":
                 is_const =True
-                saves.append(tokens[i_])
-                dq.append(tokens[i_])
+                saves.append(token)
+                dq.append(token)
                 self.Const()
-            elif tokens[i_] == "volatile":
-                saves.append(tokens[i_])
+            elif token == "volatile":
+                saves.append(token)
                 #is_volatile = True
-                dq.append(tokens[i_])
+                dq.append(token)
                 self.Volatile()
-            elif tokens[i_] == "static":
-                saves.append(tokens[i_])
+            elif token == "static":
+                saves.append(token)
                 is_static = True
-                dq.append(tokens[i_])
+                dq.append(token)
                 self.Static()
-            elif tokens[i_] == "enum":
-                dq.append(tokens[i_])
-                current_type_ = build_in_type.ENUM
-                if name_ == "":
-                    name_ == f"anonymous {tokens[i_]}"
-                members_ : dict[str, identifier] = {}
-                i_ += 1
-                
-               
-                auto_value = 0
-                while tokens[i_] != "}":
-                    temp_enum = identifier(build_in_type.INT, tokens[i_])
-                    i_ += 1
-                    if tokens[i_] == "=":
-                        i_ += 1
-                        temp_enum.value = tokens[i_]
-                        assert tokens[i_].isnumeric()
-                        auto_value = int(tokens[i_]) + 1
-                    else:
-                        temp_enum.value = auto_value
-                        auto_value += 1
-                    members_[temp_enum.annotated_name] = temp_enum
-                    i_ += 1
-                i_ += 1
-                identifier_ = CTypeFactory.auto_call_method(current_type_, name_, members_)
-                Lexer.all_typedef[identifier_.annotated_name] = identifier_
-            elif tokens[i_] in ["struct", "union"]:
-                dq.append(tokens[i_])
-                current_type_ = build_in_type.DEFINED_STRUCT if tokens[i_] == "struct" else build_in_type.DEFINED_UNION
-                if name_ == "":
-                    name_ = f"anonymous {self.GenerateRandomName()}"
-                members_ : dict[str, identifier] = {}
-                i_ += 1
-                if self.is_legal_identifier(tokens[i_]) and self.is_legal_identifier(tokens) and tokens[i_] == ";": # struct A ; 
-                    continue
-                elif self.is_legal_identifier(tokens[i_]) and self.is_legal_identifier(tokens[i_]): # struct A a;
-                    continue
-                assert (self.is_legal_identifier(tokens[i_]) and tokens[i_] == "{") or tokens[i_] == "{"
-                #assert tokens[i_] == "{"
-                i_ += 1
-                while tokens[i_] != "}":
-                    temp_  = self.LexerImpl(tokens, i_)
-                    if temp_ is None:
-                        break
-                    i_ = self.i_
-                    members_[temp_.annotated_name] = temp_
-                    while tokens[i_] == "\n":
-                        i_ += 1
-                i_ += 1
-                
-                identifier_: C_type = CTypeFactory.auto_call_method(current_type_, name_, members_)
+            elif token == "enum":
+                dq.append(token)
+                current_type_ = build_in_type.DEFINED_ENUM
+                identifier_idx = self.GetIdenfitiferIndex(dq)
+                name_ = ""
+                if identifier_idx < 0:
+                    name_ == f"anonymous {token}"
+                else:
+                    name_ = dq[identifier_idx]
+
+
+                if self.is_legal_identifier(token) and self.is_legal_identifier(TE.peek(1)) and TE.peek(2) == ";": # enum A ; 
+                    TE.update(2)
+                elif self.is_legal_identifier(token) and self.is_legal_identifier(TE.peek(1)): # enum A a;
+                    TE.update(1)
+                assert (self.is_legal_identifier(token) and TE.peek(1) == "{") or token == "{"
+                TE.update(2)
+                member_ = self.parse_enum(TE)
+                identifier_ = CTypeFactory.auto_call_method(current_type_, name_, member_)
+                if name_ != "":
+                    Lexer.all_typedef[identifier_.name_] = identifier_
+
                 temp_name= "" 
                 temp_type : C_type = None
-                while tokens[i_] != ";":
-                    if self.is_legal_identifier(tokens[i_]):
-                        temp_name = tokens[i_]
-                    #elif tokens[i_] == ",":
-                    #    Lexer.all_typedef[temp_name] = identifier_ if temp_type is None else identifier_.using_type
-                    #    temp_type = None
-                    elif tokens[i_] == "*":
-                        #i_ += 1
-                        #assert self.is_legal_identifier(tokens[i_])
+                while token != ";":
+                    if self.is_legal_identifier(token):
+                        temp_name = token
+                    elif token == "*":
                         temp_type = C_build_in_pointer(identifier_.using_type)
-                    elif tokens[i_] == "[":
-                        i_ += 1
-                        #temp_type = None
-                        #while tokens[i_] not in [",", ";"]:
+                    elif token == "[":
                         sz_ = ""
-                        while tokens[i_] != "]":
-                            sz_ += tokens[i_]
-                            i_ += 1
+                        while token != "]":
+                            sz_ += token
                         if temp_type is not None:
                             temp_type = CTypeFactory.get_array(temp_type, sz_)
                         else:
                             temp_type = CTypeFactory.get_array(identifier_, sz_)
-                        #i_ += 1
-                    i_ += 1
-                        #continue
-                    if tokens[i_] in ["," ,";"]:
-                        Lexer.all_typedef[temp_name] = identifier_ if temp_type is None else identifier_.using_type
-                        #print(f"{identifier_}")
+                    token = TE.update(1)
+                    if token in ["," ,";"]:
+                        new_type = deepcopy(identifier_ if temp_type is None else identifier_.using_type)
+                        new_type.name = temp_name
+                        Lexer.all_typedef[temp_name] = new_type
                         temp_type = None
+                        temp_name = ""
+                while len(dq):
+                    dq.pop()
+
+            elif token in ["struct", "union"]:
+                dq.append(token)
+                current_type_ = build_in_type.DEFINED_STRUCT if token == "struct" else build_in_type.DEFINED_UNION
+                identifier_idx = self.GetIdenfitiferIndex(dq)
+                if identifier_idx < 0:
+                    name_ = f"anonymous {self.GenerateRandomName()}"
+                else:
+                    name_ = dq[identifier_idx]
+                
+                if self.is_legal_identifier(token) and self.is_legal_identifier(TE.peek()) and TE.peek(2) == ";": # enum A ; 
+                    TE.update(2)
+                elif self.is_legal_identifier(token) and self.is_legal_identifier(TE.peek()): # enum A a;
+                    TE.update(1)
+                assert (self.is_legal_identifier(token) and TE.peek(1) == "{") or token == "{"
+
+                TE.update(2)
+                
+                    
+                member_ = self.parse_struct(TE) 
+                identifier_: C_type = CTypeFactory.auto_call_method(current_type_, name_, member_)
+                temp_name= ""
+                token = TE.peek(0) 
+                temp_type : C_type = None
+                while token != ";":
+                    if self.is_legal_identifier(token):
+                        temp_name = token
+                    elif token == "*":
+                        temp_type = C_build_in_pointer(identifier_.using_type)
+                    elif token == "[":
+                        sz_ = ""
+                        while token != "]":
+                            sz_ += token
+                        if temp_type is not None:
+                            temp_type = CTypeFactory.get_array(temp_type, sz_)
+                        else:
+                            temp_type = CTypeFactory.get_array(identifier_, sz_)
+                    
+                    token = TE.update(1)
+                    if token in ["," ,";"]:
+                        new_type = deepcopy(identifier_ if temp_type is None else identifier_.using_type)
+                        new_type.name = temp_name
+                        Lexer.all_typedef[temp_name] = new_type
+                        temp_type = None
+                        temp_name = ""
                 while len(dq):
                     dq.pop()
                 a = 0
-                name_ = ""
-            elif tokens[i_] == ";":
+            elif token == ";":
                 assert identifier_ is not None
                 if isinstance(identifier_, identifier) and val_ is not None:
                     identifier_.value = val_
-                i_ += 1
                 if is_typing:
                     pass
                     return None
                 else:
                     identifier_idx = self.GetIdenfitiferIndex(dq)
+                    name_ = dq[identifier_idx]
                     complicate_type = self.read_complicate_type(dq, identifier_idx -1, identifier_idx + 1);
                     id_ =   identifier(complicate_type, name_, nan, self.Const(), self.Volatile(), self.Static())
                     #Lexer.all_typedef[id_.annotated_name] = id_
                     is_typing = False
-                    self.i_ = i_
                     name_ = ""
                     return id_
-            elif tokens[i_] == "}":
+            elif token == "}":
                 return None
-            elif tokens[i_] == "(":
-                dq.append(tokens[i_])
+            elif token == "(":
+                dq.append(token)
                 identifier_idx = self.GetIdenfitiferIndex(dq)
                 if identifier_idx < 0:
                     pass
                 elif dq[identifier_idx - 1] == "*":
                     pass
                 elif name_ != "":
-                    #i_ = self.read_function(tokens, i_)
-                    i_ += 1
                     args = {}
-                    while tokens[i_] != ")":
+                    while token != ")":
                         temp_ = []
-                        while tokens[i_] != "," and tokens[i_] != ")":
-                            temp_.append(tokens[i_])
-                            i_ += 1
+                        while token != "," and token != ")":
+                            temp_.append(token)
                         identifier_idx = self.GetIdenfitiferIndex(dq)
                         
                         id_ = self.read_complicate_type(temp_, identifier_idx - 1, identifier_idx + 1)
-                        if tokens[i_] == ")":
-                            i_ += 1
+                        if token == ")":
                             break
-                        i_ += 1
                     #while
-                    i_ += 1
-                    body_, i_ = self.read_function_body(tokens, i_)
+                    body_ = self.read_function_body(TE)
                     
                     fb = FunctionBody(name_, CTypeFactory.auto_call_method(dq[identifier_idx - 1]), args, body_)
                     Lexer.all_function[fb.name_] = fb
                 
                 pass
-            elif tokens[i_] == ")":
+            elif token == ")":
                 pass
-                dq.append(tokens[i_])
-            elif tokens[i_] == "[":
+                dq.append(token)
+            elif token == "[":
                 sz_ = ""
-                dq.append(tokens[i_])
-                i_ += 1
-                while tokens[i_] != "]":
-                    dq.append(tokens[i_])
-                    sz_ += tokens[i_]
-                    i_ += 1
-                dq.append(tokens[i_])
                 #dq.append(token)
-                #i_ += 1
+                while token != "]":
+                    dq.append(token)
+                    sz_ += token
+                    token = TE.update()
+                dq.append(token)
+                #TE.update()
+
                 assert type_ is not None
                 type_ = CTypeFactory.get_array(type_, sz_)
 
-            elif tokens[i_] == "*":
-                dq.append(tokens[i_])
+            elif token == "*":
+                dq.append(token)
                 type_ = C_build_in_pointer(type_)
                 pass
-            elif self.is_type_keyword(tokens[i_]):
-                dq.append(tokens[i_])
-                type_ = CTypeFactory.auto_call_method(tokens[i_])
-            elif self.is_legal_identifier(tokens[i_]):
+            elif self.is_type_keyword(token):
+                dq.append(token)
+                type_ = CTypeFactory.auto_call_method(token)
+            elif self.is_legal_identifier(token):
                 #assert type_ is not None
-                dq.append(tokens[i_])
-                name_ = tokens[i_]
-            elif tokens[i_] == "=":
+                dq.append(token)
+            elif token == "=":
                 
                 identifier_idx = self.GetIdenfitiferIndex(dq)
+                name_ = dq[identifier_idx]
                 temp_type = self.read_complicate_type(dq, identifier_idx - 1, identifier_idx + 1)
                 id_ = identifier(temp_type, name_, None, self.Const(), self.Volatile(), self.Static())
-                #dq.append(tokens[i_])
-                i_ += 1
-                assign_list, i_  = self.initialization_list(tokens, i_)
+                #dq.append(token)
+                assign_list  = self.initialization_list(TE)
                 #print(assign_list)
                 while len(dq):
                     dq.pop()
-                i_ += 1
-                val_ = self.is_literal(tokens[i_])
+                val_ = self.is_literal(token)
             
             #tokens.popleft()
-            i_ += 1
+            #i_ += 1
         return
 
 
@@ -1875,54 +1961,6 @@ class Lexer:
         #tokens = [x != " " and x != "" for x in tokens if x]
         tokens = [s for s in tokens if s != "" and s != " "]
         return tokens
-        len_ = len(tokens)    
-        i_ = 0
-        ret = []
-        bracket = []
-        temp = []
-        while i_ < len_:
-            if self.is_reserved_word(tokens[i_]):
-                temp.append(tokens[i_])
-            elif tokens[i_] == "/" and tokens[i_ + 1] == "*" :
-                i_ += 2
-                while tokens[i_] != "*" and tokens[i_ + 1] != "/":
-                    i_ += 1
-                i_ += 2
-            elif tokens[i_] == "/" and tokens[i_ + 1] == "/":
-                i_ += 2
-                while tokens[i_] != "\n":
-                    i_ += 1
-                    if tokens[i_] == "\\":
-                        i_ += 2
-                #i_ += 2
-            elif tokens[i_] == "#" and tokens[i_ + 1] in ["if", "endif", "ifdef", "ifndef", "define" ,"else", "include"]:
-                i_ = self.consume_preprocess(tokens, i_)
-            elif tokens[i_] == "extern":
-                i_ = self.consume_extern_C(tokens, i_)
-                len_ = len(tokens)
-            elif tokens[i_] != "" and tokens[i_] in string.punctuation:
-                temp.append(tokens[i_])
-                if tokens[i_] == "{":
-                    bracket.append("}")
-                elif tokens[i_] == "(":
-                    bracket.append(")")
-                elif tokens[i_] == "[":
-                    bracket.append("]")
-                elif tokens[i_] in ["}", "]", ")"]:
-                    assert bracket[-1] == tokens[i_]
-                    bracket.pop()
-            elif self.is_type_keyword(tokens[i_]):
-                temp.append(tokens[i_])
-            elif self.is_legal_identifier(tokens[i_]):
-                temp.append(tokens[i_])  
-            
-            if len(bracket) == 0 and tokens[i_] == ";":
-                ret.append(temp)
-                print(temp)
-                temp = []
-            i_ += 1
-        return ret
-        
 
     def OmitToken(self, codes: str) -> Generator[str, any, any]:
         token = ""
@@ -2202,24 +2240,29 @@ class Lexer:
     def ParseFile(self, filename: str):
         with open(filename, "r") as fp:
             codes = fp.read()
-            ret = self.split_token(self.remove_comments_macros(codes))
+            TE = TokenEmiter(self.split_token(self.remove_comments_macros(codes)))
             #ret = self.remove_preprocess(self.split_token(codes))
             #assert " " not in ret
 
-            self.LexerImpl(ret, 0)
+            self.LexerImpl(TE)
+        #for v_ in Lexer.all_typedef.values():
+        #    print(f"{v_:to}")
         cfg_ = identifier(self.all_typedef["foocfg"], "cfg")
         reg_ = identifier(self.all_typedef["fooreg"], "reg")
         cfg_[["a"]]= 1
         cfg_[["b"]]= 0
         cfg_[["c"]]= 3
+        #for t in Lexer.all_function["init_func"].statement_.ret:
+        #    print(t.set_item)
+        #    print(t.get_item)
         #for k, v in Lexer.all_typedef.items():
         #print(f"{Lexer.all_typedef["foo"]}")
 
-        for t in Lexer.all_function["init_func"].statement_.ret:
+        """         for t in Lexer.all_function["init_func"].statement_.ret:
             print(t.set_item, t.get_item)
             reg_[t.set_item] = cfg_[t.get_item]
         #print(f"{reg_:nvtl}")
-        print(f"{Lexer.all_typedef["bar"]:nvtl}")
+        print(f"{Lexer.all_typedef["Color"]:nvtl}") """
         #print(f"{Lexer.all_typedef["bar"]:nvtl}")
         
 
