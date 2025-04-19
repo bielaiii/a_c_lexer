@@ -1,5 +1,5 @@
 import unittest
-from a_c_lexer.lexer import (
+from lexer import (
     build_in_type,
     SetType,
     C_type,
